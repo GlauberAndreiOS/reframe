@@ -1,0 +1,26 @@
+{
+  "name": "@reframe/reframe-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@reframe/reframe"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/reframe-e2e/jest.config.ts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "@reframe/reframe:build",
+          "@reframe/reframe:serve"
+        ]
+      }
+    }
+  }
+}
