@@ -22,11 +22,6 @@
       },
       "package": "com.gandreidev.reframe"
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png",
-      "backgroundColor": "#151718"
-    },
     "plugins": [
       "expo-router",
       [
