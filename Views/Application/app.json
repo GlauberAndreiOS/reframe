@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Reframe",
+    "slug": "reframe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/favicon.png",
+    "scheme": "application",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "backgroundColor": "#151718",
+    "ios": {
+      "supportsTablet": true,
+      "backgroundColor": "#151718"
+    },
+    "android": {
+      "backgroundColor": "#151718",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/favicon.png",
+        "backgroundColor": "#151718"
+      },
+      "package": "com.gandreidev.reframe"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "backgroundColor": "#151718"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/favicon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#151718",
+          "dark": {
+            "backgroundColor": "#151718"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "34aa5698-6fc4-4af9-a7ec-3ee187b1daef"
+      }
+    }
+  }
+}
