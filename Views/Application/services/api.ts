@@ -8,7 +8,6 @@ const api = axios.create({
 	},
 });
 
-// Add a request interceptor to inject the token
 api.interceptors.request.use(
 	async (config) => {
 		const token = await SecureStore.getItemAsync('token');
@@ -22,10 +21,12 @@ api.interceptors.request.use(
 	}
 );
 
-// Logger
 api.interceptors.response.use(
 	(response) => response,
-	(error) => console.log(error)
-)
+	(error) => {
+		console.log('API Error:', error.response?.status, error.response?.data || error.message);
+		return Promise.reject(error);
+	}
+);
 
 export default api;

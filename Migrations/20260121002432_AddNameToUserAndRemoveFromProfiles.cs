@@ -4,10 +4,10 @@
 
 namespace reframe.Migrations
 {
-    /// <inheritdoc />
+
     public partial class AddNameToUserAndRemoveFromProfiles : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
@@ -26,7 +26,6 @@ namespace reframe.Migrations
                 defaultValue: "");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(

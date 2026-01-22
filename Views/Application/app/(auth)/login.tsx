@@ -1,38 +1,43 @@
 import React, { useState } from 'react';
 import {
-	View,
-	TextInput,
 	TouchableOpacity,
 	StyleSheet,
-	Alert,
 	ActivityIndicator,
 	KeyboardAvoidingView,
-	Platform
+	Platform,
+	View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Image } from 'expo-image';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ThemedView } from '@/components/themed-view';
+import { ThemedText } from '@/components/themed-text';
+import { useToast } from '@/context/ToastContext';
+import { AmbientBackground } from '@/components/ui/ambient-background';
+import { GlassInput } from '@/components/ui/glass-input';
+import { ReframeLogo } from '@/components/ui/reframe-logo';
+import { AnimatedEntry } from '@/components/ui/animated-entry';
 
 export default function Login() {
 	const router = useRouter();
 	const { signIn } = useAuth();
+	const { showToast } = useToast();
+	const colorScheme = useColorScheme() ?? 'light';
+	const isDark = colorScheme === 'dark';
   
 	const [username, setUsername] = useState('');
 	const [password, setPassword] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
 
-	const textColor = useThemeColor({}, 'text');
 	const tintColor = useThemeColor({}, 'tint');
-  
-	const buttonTextColor = '#FFFFFF';
+	const borderColor = useThemeColor({}, 'border');
+	const mutedColor = useThemeColor({}, 'muted');
 
 	const handleLogin = async () => {
 		if (!username || !password) {
-			Alert.alert('Erro', 'Preencha usuário e senha.');
+			showToast('Preencha usuário e senha.', 'error');
 			return;
 		}
 
@@ -45,23 +50,12 @@ export default function Login() {
 			});
 
 			const { token, userType } = response.data;
-			console.log('Login API success:', { token: '***', userType });
-      
-			// Update context state
 			await signIn(token, userType);
-      
-			// Force navigation immediately after state update
-			console.log('Forcing navigation to tabs...');
-			if (userType === 0) {
-				router.replace('/(psychologist)');
-			} else {
-				router.replace('/(patient)');
-			}
       
 		} catch (error: any) {
 			console.error('Login error:', error);
 			const errorMessage = error.response?.data || 'Falha ao realizar login.';
-			Alert.alert('Erro', typeof errorMessage === 'string' ? errorMessage : 'Falha ao realizar login.');
+			showToast(typeof errorMessage === 'string' ? errorMessage : 'Falha ao realizar login.', 'error');
 		} finally {
 			setIsLoading(false);
 		}
@@ -69,64 +63,69 @@ export default function Login() {
 
 	return (
 		<ThemedView style={styles.container}>
+			<AmbientBackground />
+
 			<KeyboardAvoidingView 
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 				style={styles.keyboardView}
 			>
-				<View style={styles.formContainer}>
-					<View style={styles.logoContainer}>
-						<Image 
-							source={require('@/assets/images/favicon.png')} 
-							style={styles.logo}
-							contentFit="none"
-						/>
-					</View>
-					<ThemedText type="title" style={styles.title}>Bem-vindo de volta!</ThemedText>
+				<AnimatedEntry style={styles.contentContainer}>
+					<ReframeLogo />
           
-					<TextInput
-						style={[styles.input, { color: textColor, borderColor: textColor }]}
-						placeholder="Usuário ou Email"
-						placeholderTextColor="#999"
-						value={username}
-						onChangeText={setUsername}
-						autoCapitalize="none"
-						keyboardType="email-address"
-					/>
-          
-					<TextInput
-						style={[styles.input, { color: textColor, borderColor: textColor }]}
-						placeholder="Senha"
-						placeholderTextColor="#999"
-						value={password}
-						onChangeText={setPassword}
-						secureTextEntry
-					/>
+					<View style={styles.formSection}>
+						<View style={styles.inputGroup}>
+							<GlassInput 
+								placeholder="Email profissional ou usuário"
+								value={username}
+								onChangeText={setUsername}
+								autoCapitalize="none"
+								keyboardType="email-address"
+							/>
+              
+							<GlassInput 
+								placeholder="Senha de acesso"
+								value={password}
+								onChangeText={setPassword}
+								secureTextEntry
+							/>
+						</View>
 
-					<TouchableOpacity 
-						style={[styles.button, { backgroundColor: tintColor }, isLoading && styles.buttonDisabled]} 
-						onPress={handleLogin}
-						disabled={isLoading}
-					>
-						{isLoading ? (
-							<ActivityIndicator color={buttonTextColor} />
-						) : (
-							<ThemedText style={[styles.buttonText, { color: buttonTextColor }]}>Entrar</ThemedText>
-						)}
-					</TouchableOpacity>
-
-					<View style={styles.footer}>
-						<TouchableOpacity onPress={() => router.push('/(auth)/forgetpassword')}>
-							<ThemedText style={[styles.linkText, { color: tintColor }]}>Esqueci minha senha</ThemedText>
-						</TouchableOpacity>
-            
-						<View style={styles.registerContainer}>
-							<ThemedText style={styles.text}>Não tem uma conta? </ThemedText>
-							<TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-								<ThemedText style={[styles.linkTextBold, { color: tintColor }]}>Cadastre-se</ThemedText>
+						<View style={[
+							styles.secondaryActionsContainer, 
+							{ 
+								borderColor: borderColor,
+								backgroundColor: isDark ? 'rgba(255, 255, 255, 0.01)' : 'rgba(0, 0, 0, 0.01)'
+							}
+						]}>
+							<TouchableOpacity 
+								style={styles.secondaryButton}
+								onPress={() => router.push('/(auth)/forgetpassword')}
+							>
+								<ThemedText style={[styles.secondaryButtonText, { color: mutedColor }]}>Esqueci minha senha</ThemedText>
+							</TouchableOpacity>
+							<View style={[styles.separator, { backgroundColor: borderColor }]} />
+							<TouchableOpacity 
+								style={styles.secondaryButton}
+								onPress={() => router.push('/(auth)/register')}
+							>
+								<ThemedText style={[styles.secondaryButtonText, { color: tintColor }]}>Não tenho conta</ThemedText>
 							</TouchableOpacity>
 						</View>
+            
+						<TouchableOpacity 
+							style={[styles.primaryButton, { backgroundColor: tintColor }]}
+							onPress={handleLogin}
+							disabled={isLoading}
+							activeOpacity={0.8}
+						>
+							{isLoading ? (
+								<ActivityIndicator color="#FFFFFF" />
+							) : (
+								<ThemedText style={styles.primaryButtonText}>INICIAR REESTRUTURAÇÃO</ThemedText>
+							)}
+						</TouchableOpacity>
 					</View>
-				</View>
+				</AnimatedEntry>
 			</KeyboardAvoidingView>
 		</ThemedView>
 	);
@@ -135,69 +134,69 @@ export default function Login() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+		position: 'relative',
 	},
 	keyboardView: {
 		flex: 1,
 		justifyContent: 'center',
-		padding: 20,
 	},
-	formContainer: {
+	contentContainer: {
+		paddingHorizontal: 24,
 		width: '100%',
-		maxWidth: 400,
+		maxWidth: 600,
 		alignSelf: 'center',
-	},
-	logoContainer: {
 		alignItems: 'center',
+		gap: 40,
 	},
-	logo: {
-		width: 300,
-		height: 300,
-	},
-	title: {
-		marginBottom: 40,
-		textAlign: 'center',
-	},
-	input: {
+	formSection: {
 		width: '100%',
-		height: 50,
-		borderWidth: 1,
-		borderRadius: 8,
-		paddingHorizontal: 15,
-		marginBottom: 15,
-		fontSize: 16,
+		gap: 32,
 	},
-	button: {
-		width: '100%',
-		height: 50,
-		borderRadius: 8,
-		justifyContent: 'center',
-		alignItems: 'center',
-		marginTop: 10,
+	inputGroup: {
+		gap: 16,
 	},
-	buttonDisabled: {
-		opacity: 0.7,
-	},
-	buttonText: {
-		fontSize: 18,
-		fontWeight: 'bold',
-	},
-	footer: {
-		marginTop: 30,
-		alignItems: 'center',
-		gap: 15,
-	},
-	registerContainer: {
+	secondaryActionsContainer: {
 		flexDirection: 'row',
+		width: '100%',
+		borderRadius: 16,
+		borderWidth: 1,
+		overflow: 'hidden',
+	},
+	secondaryButton: {
+		flex: 1,
+		paddingVertical: 16,
 		alignItems: 'center',
+		justifyContent: 'center',
 	},
-	text: {
-		fontSize: 16,
+	separator: {
+		width: 1,
 	},
-	linkText: {
-		fontSize: 16,
+	secondaryButtonText: {
+		fontSize: 10,
+		fontWeight: '700',
+		textTransform: 'uppercase',
+		letterSpacing: 2,
 	},
-	linkTextBold: {
-		fontSize: 16,
-		fontWeight: 'bold',
+	primaryButton: {
+		width: '100%',
+		height: 64,
+		borderRadius: 16,
+		alignItems: 'center',
+		justifyContent: 'center',
+		shadowColor: '#000',
+		shadowOffset: {
+			width: 0,
+			height: 10,
+		},
+		shadowOpacity: 0.3,
+		shadowRadius: 20,
+		elevation: 10,
+	},
+	primaryButtonText: {
+		color: '#FFFFFF',
+		fontSize: 12,
+		fontWeight: '900',
+		letterSpacing: 3,
+		textTransform: 'uppercase',
 	},
 });

@@ -8,11 +8,10 @@ public class Psychologist
 {
     [Key]
     public int Id { get; set; }
-    
-    // Name movido para User, mantido aqui temporariamente ou removido se preferir.
-    // Vamos remover para evitar duplicação, já que a ideia é centralizar no User.
-    // [Required]
-    // public string Name { get; set; } = string.Empty;
+
+
+
+
     
     [Required]
     public string CRP { get; set; } = string.Empty;

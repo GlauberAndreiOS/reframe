@@ -19,8 +19,7 @@ public class AutomaticThoughtController : ControllerBase
         _context = context;
     }
 
-    // GET: api/AutomaticThought
-    // Retorna os pensamentos do paciente logado
+
     [HttpGet]
     [Authorize(Roles = "Patient")]
     public async Task<ActionResult<IEnumerable<AutomaticThought>>> GetMyThoughts()
@@ -36,8 +35,7 @@ public class AutomaticThoughtController : ControllerBase
             .ToListAsync();
     }
 
-    // GET: api/AutomaticThought/patient/{patientId}
-    // Psicólogo vê os pensamentos de um paciente específico
+
     [HttpGet("patient/{patientId}")]
     [Authorize(Roles = "Psychologist")]
     public async Task<ActionResult<IEnumerable<AutomaticThought>>> GetPatientThoughts(int patientId)
@@ -47,7 +45,6 @@ public class AutomaticThoughtController : ControllerBase
 
         if (psychologist == null) return NotFound("Psychologist profile not found.");
 
-        // Verifica se o paciente pertence a este psicólogo
         var patient = await _context.Patients.FindAsync(patientId);
         if (patient == null || patient.PsychologistId != psychologist.Id)
         {
@@ -60,8 +57,7 @@ public class AutomaticThoughtController : ControllerBase
             .ToListAsync();
     }
 
-    // POST: api/AutomaticThought
-    // Paciente cria um novo registro
+
     [HttpPost]
     [Authorize(Roles = "Patient")]
     public async Task<ActionResult<AutomaticThought>> CreateThought(AutomaticThoughtDto dto)

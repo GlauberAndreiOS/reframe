@@ -8,7 +8,6 @@ using reframe.Data;
 using reframe.Services;
 using Swashbuckle.AspNetCore.Filters;
 
-// Carregar arquivo .env manualmente antes de criar o builder
 var root = Directory.GetCurrentDirectory();
 var dotenv = Path.Combine(root, ".env");
 if (File.Exists(dotenv))
@@ -29,11 +28,10 @@ if (File.Exists(dotenv))
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        // Configura o serializador JSON para lidar com ciclos de referência
+
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
@@ -71,7 +69,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme) // De
         };
     });
 
-// Configuração de CORS para permitir acesso externo (ex: app mobile)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -85,18 +82,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Aplicar migrations automaticamente na inicialização
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        
-        // Em desenvolvimento, podemos recriar o banco para garantir estado limpo
-        // CUIDADO: Isso apaga todos os dados!
-        // context.Database.EnsureDeleted();
-        // context.Database.EnsureCreated(); // Não use EnsureCreated com Migrations
+
+
+
+
 
         context.Database.Migrate(); // Cria o banco se não existir e aplica migrations pendentes
     }
@@ -107,7 +102,6 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -118,7 +112,6 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// app.UseHttpsRedirection(); // Comentado para facilitar testes locais sem certificado HTTPS válido no emulador
 app.UseRouting();
 
 app.UseCors("AllowAll"); // Aplica a política de CORS
@@ -128,5 +121,4 @@ app.UseAuthorization();
 
 app.MapControllers(); // Mapeia apenas os controllers de API
 
-// Faz a aplicação escutar em todas as interfaces de rede (0.0.0.0)
 app.Run();

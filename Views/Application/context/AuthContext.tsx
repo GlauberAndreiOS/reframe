@@ -8,24 +8,19 @@ import React, {
 import * as SecureStore from 'expo-secure-store';
 import { useRouter, useSegments } from 'expo-router';
 
-interface AuthContextType {
+interface AuthState {
 	token: string | null;
-	userType: number | null; // 0 = Psychologist, 1 = Patient
-	isLoading: boolean;
+	userType: number | null;
+}
+
+interface AuthContextType extends AuthState {
 	signIn: (token: string, userType: number) => Promise<void>;
 	signOut: () => Promise<void>;
 }
 
-type AuthState = {
-	token: string | null;
-	userType: number | null;
-	hydrated: boolean;
-};
-
 const AuthContext = createContext<AuthContextType>({
 	token: null,
 	userType: null,
-	isLoading: true,
 	signIn: async () => {},
 	signOut: async () => {},
 });
@@ -34,64 +29,27 @@ export function useAuth() {
 	return useContext(AuthContext);
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-	const [auth, setAuth] = useState<AuthState>({
+interface AuthProviderProps {
+	children: ReactNode;
+	initialAuth?: AuthState;
+}
+
+export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
+	const [auth, setAuth] = useState<AuthState>(initialAuth || {
 		token: null,
 		userType: null,
-		hydrated: false,
 	});
 
 	const router = useRouter();
 	const segments = useSegments();
-
-	/**
-	 * Hydration — carrega auth do SecureStore de forma atômica
-	 */
+	
 	useEffect(() => {
-		let mounted = true;
-
-		const hydrate = async () => {
-			try {
-				const [storedToken, storedUserType] = await Promise.all([
-					SecureStore.getItemAsync('token'),
-					SecureStore.getItemAsync('userType'),
-				]);
-
-				if (!mounted) return;
-
-				setAuth({
-					token: storedToken,
-					userType: storedUserType ? Number(storedUserType) : null,
-					hydrated: true,
-				});
-			} catch {
-				if (!mounted) return;
-
-				setAuth({
-					token: null,
-					userType: null,
-					hydrated: true,
-				});
-			}
-		};
-
-		hydrate();
-
-		return () => {
-			mounted = false;
-		};
-	}, []);
-
-	/**
-	 * Navigation guard — só roda após hidratação completa
-	 */
-	useEffect(() => {
-		if (!auth.hydrated) return;
+		// @ts-ignore
+		if (segments.length === 0) return;
 
 		// @ts-ignore
-		const inAuthGroup = segments[0] === '(auth)' || segments.length === 0;
+		const inAuthGroup = segments[0] === '(auth)';
 
-		// Usuário NÃO autenticado
 		if (!auth.token) {
 			if (!inAuthGroup) {
 				router.replace('/(auth)/login');
@@ -99,7 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			return;
 		}
 
-		// Usuário autenticado
 		if (inAuthGroup) {
 			if (auth.userType === 0) {
 				// @ts-ignore
@@ -112,9 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [auth, segments]);
 
-	/**
-	 * Auth actions
-	 */
 	const signIn = async (token: string, userType: number) => {
 		await Promise.all([
 			SecureStore.setItemAsync('token', token),
@@ -124,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		setAuth({
 			token,
 			userType,
-			hydrated: true,
 		});
 	};
 
@@ -137,7 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		setAuth({
 			token: null,
 			userType: null,
-			hydrated: true,
 		});
 
 		router.replace('/(auth)/login');
@@ -148,7 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			value={{
 				token: auth.token,
 				userType: auth.userType,
-				isLoading: !auth.hydrated,
 				signIn,
 				signOut,
 			}}

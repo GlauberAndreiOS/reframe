@@ -22,8 +22,7 @@ public class PatientController : ControllerBase
         _logger = logger;
     }
 
-    // POST: api/Patient/link/{psychologistId}
-    // Permite ao paciente se vincular a um psicólogo
+
     [HttpPost("link/{psychologistId}")]
     [Authorize(Roles = "Patient")]
     public async Task<IActionResult> LinkToPsychologist(int psychologistId)
@@ -48,8 +47,35 @@ public class PatientController : ControllerBase
         return Ok("Successfully linked to psychologist.");
     }
 
-    // GET: api/Patient/profile
-    // Retorna o perfil do paciente logado
+
+    [HttpPut("psychologist")]
+    [Authorize(Roles = "Patient")]
+    public async Task<IActionResult> UpdatePsychologistLink([FromBody] UpdatePsychologistDto dto)
+    {
+        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (patient == null)
+        {
+            return NotFound("Patient profile not found.");
+        }
+
+        if (dto.PsychologistId.HasValue)
+        {
+            var psychologist = await _context.Psychologists.FindAsync(dto.PsychologistId.Value);
+            if (psychologist == null)
+            {
+                return NotFound("Psychologist not found.");
+            }
+        }
+
+        patient.PsychologistId = dto.PsychologistId;
+        await _context.SaveChangesAsync();
+
+        return Ok("Psychologist link updated successfully.");
+    }
+
+
     [HttpGet("profile")]
     [Authorize(Roles = "Patient")]
     public async Task<ActionResult<object>> GetProfile()
@@ -79,6 +105,7 @@ public class PatientController : ControllerBase
             Name = patient.User?.Name ?? string.Empty,
             Psychologist = patient.Psychologist != null ? new 
             {
+                Id = patient.Psychologist.Id,
                 Name = patient.Psychologist.User?.Name ?? string.Empty,
                 CRP = patient.Psychologist.CRP
             } : null

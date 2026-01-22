@@ -133,8 +133,7 @@ public class AuthController : ControllerBase
         }
 
         string token = CreateToken(user);
-        
-        // Retorna o token e o tipo de usuário
+
         return Ok(new { token, userType = (int)user.UserType });
     }
 

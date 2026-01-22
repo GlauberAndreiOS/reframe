@@ -1,20 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
 	View,
 	Text,
-	TextInput,
 	TouchableOpacity,
 	StyleSheet,
 	FlatList,
-	Alert,
 	KeyboardAvoidingView,
 	Platform,
 	ActivityIndicator
 } from 'react-native';
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import api from '@/services/api';
+import { ThemedView } from '@/components/themed-view';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import { useToast } from '@/context/ToastContext';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AmbientBackground } from '@/components/ui/ambient-background';
+import { GlassInput, HelperTextType } from '@/components/ui/glass-input';
+import { AnimatedEntry } from '@/components/ui/animated-entry';
 
 type UserType = 'patient' | 'psychologist' | null;
 
@@ -27,32 +31,34 @@ interface Psychologist {
 
 export default function Register() {
 	const router = useRouter();
-	const [step, setStep] = useState(0); // 0: Auth, 1: Type, 2: Details
+	const { showToast } = useToast();
+	const colorScheme = useColorScheme() ?? 'light';
+	const isDark = colorScheme === 'dark';
+
+	const [step, setStep] = useState(0); 
   
-	// Form State
 	const [username, setUsername] = useState('');
 	const [name, setName] = useState('');
 	const [password, setPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
 	const [userType, setUserType] = useState<UserType>(null);
   
-	// Username Validation State
 	const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-	const [usernameError, setUsernameError] = useState<string | null>(null);
-	const [usernameSuccess, setUsernameSuccess] = useState<boolean>(false);
+	const [usernameHelper, setUsernameHelper] = useState<{ text: string, type: HelperTextType } | null>(null);
+	const [passwordHelper, setPasswordHelper] = useState<{ text: string, type: HelperTextType } | null>(null);
 
-	// Password Validation State
-	const [passwordError, setPasswordError] = useState<string | null>(null);
-
-	// Psychologist Details
 	const [crp, setCrp] = useState('');
 	const [uf, setUf] = useState('');
   
-	// Patient Details
 	const [searchQuery, setSearchQuery] = useState('');
 	const [selectedPsychologistId, setSelectedPsychologistId] = useState<number | null>(null);
 	const [psychologists, setPsychologists] = useState<Psychologist[]>([]);
 	const [isLoadingPsychologists, setIsLoadingPsychologists] = useState(false);
+
+	const tintColor = useThemeColor({}, 'tint');
+	const borderColor = useThemeColor({}, 'border');
+	const mutedColor = useThemeColor({}, 'muted');
+	const textColor = useThemeColor({}, 'text');
 
 	const validateEmail = (email: string) => {
 		const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -61,27 +67,25 @@ export default function Register() {
 
 	const checkUsername = async () => {
 		if (!username) {
-			setUsernameError(null);
-			setUsernameSuccess(false);
+			setUsernameHelper(null);
 			return;
 		}
 
 		if (!validateEmail(username)) {
-			setUsernameError('Insira um e-mail válido.');
-			setUsernameSuccess(false);
+			setUsernameHelper({ text: 'Insira um e-mail válido.', type: 'error' });
 			return;
 		}
 
 		setIsCheckingUsername(true);
-		setUsernameError(null);
-		setUsernameSuccess(false);
+		setUsernameHelper(null);
 
 		try {
 			const response = await api.get(`/Auth/check-username/${username}`);
 			if (response.data.exists) {
-				setUsernameError('E-mail já cadastrado.');
+				setUsernameHelper({ text: 'E-mail já cadastrado.', type: 'error' });
+				showToast('Este e-mail já está em uso.', 'error');
 			} else {
-				setUsernameSuccess(true);
+				setUsernameHelper({ text: 'E-mail disponível!', type: 'success' });
 			}
 		} catch (error) {
 			console.error('Failed to check username:', error);
@@ -92,49 +96,49 @@ export default function Register() {
 
 	useEffect(() => {
 		if (confirmPassword && password !== confirmPassword) {
-			setPasswordError('As senhas não coincidem.');
+			setPasswordHelper({ text: 'As senhas não coincidem.', type: 'error' });
 		} else {
-			setPasswordError(null);
+			setPasswordHelper(null);
 		}
 	}, [password, confirmPassword]);
 
-	useEffect(() => {
-		if (step === 2 && userType === 'patient') {
-			fetchPsychologists();
-		}
-	}, [step, userType]);
-
-	const fetchPsychologists = async () => {
+	const fetchPsychologists = useCallback(async () => {
 		setIsLoadingPsychologists(true);
 		try {
 			const response = await api.get('/Psychologist/all');
 			setPsychologists(response.data);
 		} catch (error) {
 			console.error('Failed to fetch psychologists:', error);
-			Alert.alert('Erro', 'Não foi possível carregar a lista de psicólogos.');
+			showToast('Não foi possível carregar a lista de psicólogos.', 'error');
 		} finally {
 			setIsLoadingPsychologists(false);
 		}
-	};
+	}, [showToast]);
+
+	useEffect(() => {
+		if (step === 2 && userType === 'patient') {
+			fetchPsychologists();
+		}
+	}, [step, userType, fetchPsychologists]);
 
 	const handleNext = () => {
 		if (step === 0) {
 			if (!username || !password || !confirmPassword || !name) {
-				Alert.alert('Erro', 'Preencha todos os campos.');
+				showToast('Preencha todos os campos.', 'error');
 				return;
 			}
-			if (usernameError) {
-				Alert.alert('Erro', 'E-mail inválido ou indisponível.');
+			if (usernameHelper?.type === 'error') {
+				showToast('E-mail inválido ou indisponível.', 'error');
 				return;
 			}
 			if (password !== confirmPassword) {
-				Alert.alert('Erro', 'As senhas não coincidem.');
+				showToast('As senhas não coincidem.', 'error');
 				return;
 			}
 			setStep(1);
 		} else if (step === 1) {
 			if (!userType) {
-				Alert.alert('Erro', 'Selecione um tipo de usuário.');
+				showToast('Selecione um tipo de usuário.', 'error');
 				return;
 			}
 			setStep(2);
@@ -142,16 +146,11 @@ export default function Register() {
 	};
 
 	const handleRegister = async () => {
-		// Validation for final step
 		if (userType === 'psychologist') {
 			if (!crp || !uf) {
-				Alert.alert('Erro', 'Preencha CRP e UF.');
+				showToast('Preencha CRP e UF.', 'error');
 				return;
 			}
-		} else if (userType === 'patient') {
-			// It's optional to link now or later, but based on requirements we assume they might want to link.
-			// If linking is mandatory:
-			// if (!selectedPsychologistId) { Alert.alert('Erro', 'Vincule um psicólogo.'); return; }
 		}
     
 		const payload = {
@@ -170,25 +169,20 @@ export default function Register() {
 			)
 		};
 
-		console.log('Posting to backend:', payload);
-
 		try {
 			await api.post('/Auth/register', payload);
       
-			Alert.alert('Sucesso', 'Cadastro realizado com sucesso!', [
-				{ text: 'OK', onPress: () => router.replace('/(auth)/login') }
-			]);
+			showToast('Cadastro realizado com sucesso!', 'success');
+			setTimeout(() => router.replace('/(auth)/login'), 1500);
 		} catch (error: any) {
 			console.error(error);
 			const errorMessage = error.response?.data || 'Falha ao realizar cadastro.';
-			Alert.alert('Erro', typeof errorMessage === 'string' ? errorMessage : 'Falha ao realizar cadastro.');
+			showToast(typeof errorMessage === 'string' ? errorMessage : 'Falha ao realizar cadastro.', 'error');
 		}
 	};
 
 	const formatCrp = (text: string) => {
 		const cleaned = text.replace(/\D/g, '');
-    
-		// Format as 00/00000
 		if (cleaned.length > 2) {
 			return `${cleaned.slice(0, 2)}/${cleaned.slice(2, 7)}`;
 		}
@@ -201,96 +195,104 @@ export default function Register() {
 	};
 
 	const renderAuthStep = () => {
-		const isNextDisabled = !(username && password && confirmPassword && name) || !!usernameError || isCheckingUsername || !!passwordError;
+		const isNextDisabled = !(username && password && confirmPassword && name) || usernameHelper?.type === 'error' || isCheckingUsername || passwordHelper?.type === 'error';
 
 		return (
-			<View style={styles.stepContainer}>
-				<Text style={styles.stepTitle}>Vamos criar uma conta!</Text>
+			<View style={styles.formSection}>
+				<Text style={[styles.stepTitle, { color: textColor }]}>Vamos criar uma conta!</Text>
         
-				<TextInput
-					style={styles.input}
-					placeholder="Nome Completo"
-					value={name}
-					onChangeText={setName}
-					autoCapitalize="words"
-				/>
+				<View style={styles.inputGroup}>
+					<GlassInput
+						placeholder="Nome Completo"
+						value={name}
+						onChangeText={setName}
+						autoCapitalize="words"
+					/>
 
-				<View style={styles.inputContainer}>
-					<TextInput
-						style={[
-							styles.input, 
-							!!usernameError && styles.inputError,
-							usernameSuccess && styles.inputSuccess
-						]}
+					<GlassInput
+						helperText={usernameHelper}
 						placeholder="Email"
 						keyboardType="email-address"
 						value={username}
 						onChangeText={(text) => {
 							setUsername(text);
-							setUsernameError(null);
-							setUsernameSuccess(false);
+							setUsernameHelper(null);
 						}}
 						onBlur={checkUsername}
 						autoCapitalize="none"
+						rightAdornment={
+							isCheckingUsername ? (
+								<ActivityIndicator size="small" color={tintColor} />
+							) : null
+						}
 					/>
-					{isCheckingUsername && (
-						<ActivityIndicator style={styles.loader} size="small" color="#007AFF" />
-					)}
-				</View>
-				{usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
-				{usernameSuccess && <Text style={styles.successText}>E-mail disponível!</Text>}
 
-				<TextInput
-					style={styles.input}
-					placeholder="Senha"
-					value={password}
-					onChangeText={setPassword}
-					secureTextEntry
-				/>
-				<TextInput
-					style={[styles.input, !!passwordError && styles.inputError]}
-					placeholder="Repetir Senha"
-					value={confirmPassword}
-					onChangeText={setConfirmPassword}
-					secureTextEntry
-				/>
-				{passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+					<GlassInput
+						placeholder="Senha"
+						value={password}
+						onChangeText={setPassword}
+						secureTextEntry
+					/>
+					<GlassInput
+						helperText={passwordHelper}
+						placeholder="Repetir Senha"
+						value={confirmPassword}
+						onChangeText={setConfirmPassword}
+						secureTextEntry
+					/>
+				</View>
 
 				<TouchableOpacity 
-					style={[styles.button, isNextDisabled && styles.buttonDisabled]} 
+					style={[styles.primaryButton, { backgroundColor: tintColor }, isNextDisabled && styles.buttonDisabled]} 
 					onPress={handleNext} 
 					disabled={isNextDisabled}
 				>
-					<Text style={styles.buttonText}>Próximo</Text>
+					<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
 				</TouchableOpacity>
 			</View>
 		);
 	};
 
 	const renderTypeStep = () => (
-		<View style={styles.stepContainer}>
-			<Text style={styles.stepTitle}>Você é?</Text>
+		<View style={styles.formSection}>
+			<Text style={[styles.stepTitle, { color: textColor }]}>Você é?</Text>
 			<View style={styles.typeSelectionContainer}>
 				<TouchableOpacity
-					style={[styles.typeButton, userType === 'patient' && styles.typeButtonSelected]}
+					style={[
+						styles.typeButton, 
+						{ borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' },
+						userType === 'patient' && { backgroundColor: tintColor }
+					]}
 					onPress={() => setUserType('patient')}
 				>
-					<Text style={[styles.typeButtonText, userType === 'patient' && styles.typeButtonTextSelected]}>Paciente</Text>
+					<Text style={[
+						styles.typeButtonText, 
+						{ color: tintColor },
+						userType === 'patient' && styles.typeButtonTextSelected
+					]}>Paciente</Text>
 				</TouchableOpacity>
         
 				<TouchableOpacity
-					style={[styles.typeButton, userType === 'psychologist' && styles.typeButtonSelected]}
+					style={[
+						styles.typeButton, 
+						{ borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' },
+						userType === 'psychologist' && { backgroundColor: tintColor }
+					]}
 					onPress={() => setUserType('psychologist')}
 				>
-					<Text style={[styles.typeButtonText, userType === 'psychologist' && styles.typeButtonTextSelected]}>Psicólogo</Text>
+					<Text style={[
+						styles.typeButtonText, 
+						{ color: tintColor },
+						userType === 'psychologist' && styles.typeButtonTextSelected
+					]}>Psicólogo</Text>
 				</TouchableOpacity>
 			</View>
 			<TouchableOpacity 
-				style={[styles.button, !userType && styles.buttonDisabled]} 
+				style={[styles.primaryButton, { backgroundColor: tintColor }, !userType && styles.buttonDisabled]} 
 				onPress={handleNext}
 				disabled={!userType}
 			>
-				<Text style={styles.buttonText}>Próximo</Text>
+				<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
 			</TouchableOpacity>
 		</View>
 	);
@@ -298,30 +300,30 @@ export default function Register() {
 	const renderPsychologistDetails = () => {
 		const isFinishDisabled = !crp || !uf;
 		return (
-			<View style={styles.stepContainer}>
-				<Text style={styles.stepTitle}>Dados Profissionais</Text>
-				<TextInput
-					style={styles.input}
-					placeholder="CRP (ex: 06/12345)"
-					value={crp}
-					onChangeText={handleCrpChange}
-					keyboardType="numeric"
-					maxLength={8} // 2 digits + / + 5 digits
-				/>
-				<TextInput
-					style={styles.input}
-					placeholder="UF (ex: SP)"
-					value={uf}
-					onChangeText={setUf}
-					maxLength={2}
-					autoCapitalize="characters"
-				/>
+			<View style={styles.formSection}>
+				<Text style={[styles.stepTitle, { color: textColor }]}>Dados Profissionais</Text>
+				<View style={styles.inputGroup}>
+					<GlassInput
+						placeholder="CRP (ex: 06/12345)"
+						value={crp}
+						onChangeText={handleCrpChange}
+						keyboardType="numeric"
+						maxLength={8}
+					/>
+					<GlassInput
+						placeholder="UF (ex: SP)"
+						value={uf}
+						onChangeText={setUf}
+						maxLength={2}
+						autoCapitalize="characters"
+					/>
+				</View>
 				<TouchableOpacity 
-					style={[styles.button, isFinishDisabled && styles.buttonDisabled]} 
+					style={[styles.primaryButton, { backgroundColor: tintColor }, isFinishDisabled && styles.buttonDisabled]} 
 					onPress={handleRegister}
 					disabled={isFinishDisabled}
 				>
-					<Text style={styles.buttonText}>Finalizar Cadastro</Text>
+					<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
 				</TouchableOpacity>
 			</View>
 		);
@@ -334,37 +336,42 @@ export default function Register() {
 		);
 
 		return (
-			<View style={[styles.stepContainer, { flex: 1 }]}>
-				<Text style={styles.stepTitle}>Vincular Psicólogo</Text>
-				<TextInput
-					style={styles.input}
+			<View style={[styles.formSection, { flex: 1 }]}>
+				<Text style={[styles.stepTitle, { color: textColor }]}>Vincular Psicólogo</Text>
+				<GlassInput
 					placeholder="Buscar por nome ou CRP"
 					value={searchQuery}
 					onChangeText={setSearchQuery}
 				/>
         
 				{isLoadingPsychologists ? (
-					<ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
+					<ActivityIndicator size="large" color={tintColor} style={{ marginTop: 20 }} />
 				) : (
 					<FlatList
 						data={filteredPsychologists}
 						keyExtractor={(item) => item.id.toString()}
 						style={styles.list}
+						contentContainerStyle={{ gap: 10 }}
 						renderItem={({ item }) => (
-							<View style={styles.psychologistItem}>
+							<View style={[styles.psychologistItem, { borderColor: borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' }]}>
 								<Image source={{ uri: `https://ui-avatars.com/api/?name=${item.name}&background=random` }} style={styles.avatar} />
 								<View style={styles.psychologistInfo}>
-									<Text style={styles.psychologistName}>{item.name}</Text>
-									<Text style={styles.psychologistCrp}>CRP: {item.crp}</Text>
+									<Text style={[styles.psychologistName, { color: textColor }]}>{item.name}</Text>
+									<Text style={[styles.psychologistCrp, { color: mutedColor }]}>CRP: {item.crp}</Text>
 								</View>
 								<TouchableOpacity 
 									style={[
 										styles.linkButton, 
-										selectedPsychologistId === item.id && styles.linkButtonSelected
+										{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#eee' },
+										selectedPsychologistId === item.id && { backgroundColor: '#34C759' }
 									]}
 									onPress={() => setSelectedPsychologistId(item.id)}
 								>
-									<Text style={styles.linkButtonText}>
+									<Text style={[
+										styles.linkButtonText, 
+										{ color: textColor },
+										selectedPsychologistId === item.id && { color: '#fff' }
+									]}>
 										{selectedPsychologistId === item.id ? 'Vinculado' : 'Vincular'}
 									</Text>
 								</TouchableOpacity>
@@ -373,111 +380,108 @@ export default function Register() {
 					/>
 				)}
 
-				<TouchableOpacity style={styles.button} onPress={handleRegister}>
-					<Text style={styles.buttonText}>Finalizar Cadastro</Text>
+				<TouchableOpacity style={[styles.primaryButton, { backgroundColor: tintColor }]} onPress={handleRegister}>
+					<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
 				</TouchableOpacity>
 			</View>
 		);
 	};
 
 	return (
-		<SafeAreaView style={styles.container}>
+		<ThemedView style={styles.container}>
+			<AmbientBackground />
+			
 			<KeyboardAvoidingView 
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-				style={{ flex: 1 }}
+				style={styles.keyboardView}
 			>
-				<View style={styles.header}>
-					{step > 0 && (
-						<TouchableOpacity onPress={() => setStep(step - 1)} style={styles.backButton}>
-							<Text style={styles.backButtonText}>Voltar</Text>
-						</TouchableOpacity>
-					)}
-					{step === 0 && (
-						<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-							<Text style={styles.backButtonText}>Cancelar</Text>
-						</TouchableOpacity>
-					)}
-				</View>
+				<AnimatedEntry style={styles.contentContainer}>
+					<View style={styles.header}>
+						{step > 0 && (
+							<TouchableOpacity onPress={() => setStep(step - 1)} style={styles.backButton}>
+								<Text style={[styles.backButtonText, { color: mutedColor }]}>Voltar</Text>
+							</TouchableOpacity>
+						)}
+						{step === 0 && (
+							<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+								<Text style={[styles.backButtonText, { color: mutedColor }]}>Cancelar</Text>
+							</TouchableOpacity>
+						)}
+					</View>
 
-				<View style={styles.content}>
 					{step === 0 && renderAuthStep()}
 					{step === 1 && renderTypeStep()}
 					{step === 2 && userType === 'psychologist' && renderPsychologistDetails()}
 					{step === 2 && userType === 'patient' && renderPatientDetails()}
-				</View>
+				</AnimatedEntry>
 			</KeyboardAvoidingView>
-		</SafeAreaView>
+		</ThemedView>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#fff',
+		position: 'relative',
+	},
+	keyboardView: {
+		flex: 1,
+	},
+	contentContainer: {
+		flex: 1,
+		paddingHorizontal: 24,
+		paddingTop: 60,
+		width: '100%',
+		maxWidth: 600,
+		alignSelf: 'center',
 	},
 	header: {
-		padding: 16,
-		flexDirection: 'row',
-		alignItems: 'center',
+		marginBottom: 20,
+		alignSelf: 'flex-start',
 	},
 	backButton: {
 		padding: 8,
 	},
 	backButtonText: {
-		color: '#007AFF',
 		fontSize: 16,
+		fontWeight: '600',
 	},
-	content: {
-		flex: 1,
-		padding: 20,
-	},
-	stepContainer: {
+	formSection: {
 		width: '100%',
-		alignItems: 'center',
+		gap: 24,
+		flex: 1,
 	},
 	stepTitle: {
-		fontSize: 24,
-		fontWeight: 'bold',
-		marginBottom: 30,
+		fontSize: 28,
+		fontWeight: '900',
 		textAlign: 'center',
+		marginBottom: 10,
+		letterSpacing: 1,
+	},
+	inputGroup: {
+		gap: 16,
 	},
 	inputContainer: {
 		width: '100%',
 		position: 'relative',
 	},
-	input: {
-		width: '100%',
-		height: 50,
-		borderWidth: 1,
-		borderColor: '#ccc',
-		borderRadius: 8,
-		paddingHorizontal: 15,
-		marginBottom: 15,
-		fontSize: 16,
-	},
 	inputError: {
-		borderColor: 'red',
+		borderColor: '#EF4444', // red-500
 		borderWidth: 1,
-		backgroundColor: '#FFF0F0',
-		paddingHorizontal: 15,
 	},
 	inputSuccess: {
-		borderColor: 'green',
+		borderColor: '#10B981', // emerald-500
 		borderWidth: 1,
-		backgroundColor: '#F0FFF0',
-		paddingHorizontal: 15,
 	},
 	errorText: {
-		color: 'red',
-		alignSelf: 'flex-start',
-		marginBottom: 10,
+		color: '#EF4444',
+		fontSize: 12,
 		marginTop: -10,
 		marginLeft: 5,
 	},
 	successText: {
-		color: 'green',
-		alignSelf: 'flex-start',
-		marginBottom: 10,
+		color: '#10B981',
+		fontSize: 12,
 		marginTop: -10,
 		marginLeft: 5,
 	},
@@ -486,66 +490,72 @@ const styles = StyleSheet.create({
 		right: 15,
 		top: 15,
 	},
-	button: {
+	primaryButton: {
 		width: '100%',
-		height: 50,
-		backgroundColor: '#007AFF',
-		borderRadius: 8,
-		justifyContent: 'center',
+		height: 64,
+		borderRadius: 16,
 		alignItems: 'center',
-		marginTop: 10,
+		justifyContent: 'center',
+		shadowColor: '#000',
+		shadowOffset: {
+			width: 0,
+			height: 10,
+		},
+		shadowOpacity: 0.3,
+		shadowRadius: 20,
+		elevation: 10,
+		marginTop: 20,
+		marginBottom: 40,
 	},
 	buttonDisabled: {
-		backgroundColor: '#A0A0A0',
+		opacity: 0.5,
 	},
-	buttonText: {
-		color: '#fff',
-		fontSize: 18,
-		fontWeight: 'bold',
+	primaryButtonText: {
+		color: '#FFFFFF',
+		fontSize: 12,
+		fontWeight: '900',
+		letterSpacing: 3,
+		textTransform: 'uppercase',
 	},
 	typeSelectionContainer: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		width: '100%',
-		marginBottom: 20,
-		gap: 10,
+		gap: 16,
+		marginTop: 20,
 	},
 	typeButton: {
 		flex: 1,
-		height: 100,
+		height: 120,
 		borderWidth: 2,
-		borderColor: '#007AFF',
-		borderRadius: 10,
+		borderRadius: 16,
 		justifyContent: 'center',
 		alignItems: 'center',
-		backgroundColor: '#fff',
-	},
-	typeButtonSelected: {
-		backgroundColor: '#007AFF',
 	},
 	typeButtonText: {
-		fontSize: 18,
-		color: '#007AFF',
-		fontWeight: '600',
+		fontSize: 16,
+		fontWeight: '700',
+		textTransform: 'uppercase',
+		letterSpacing: 1,
 	},
 	typeButtonTextSelected: {
 		color: '#fff',
 	},
 	list: {
 		width: '100%',
-		marginBottom: 20,
+		flex: 1,
 	},
 	psychologistItem: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		padding: 10,
-		borderBottomWidth: 1,
-		borderBottomColor: '#eee',
+		padding: 16,
+		borderRadius: 16,
+		borderWidth: 1,
 	},
 	avatar: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
+		width: 40,
+		height: 40,
+		borderRadius: 20,
 		marginRight: 12,
 	},
 	psychologistInfo: {
@@ -557,20 +567,15 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 	},
 	psychologistCrp: {
-		fontSize: 14,
-		color: '#666',
+		fontSize: 12,
 	},
 	linkButton: {
-		paddingVertical: 6,
-		paddingHorizontal: 12,
-		backgroundColor: '#eee',
-		borderRadius: 6,
-	},
-	linkButtonSelected: {
-		backgroundColor: '#34C759',
+		paddingVertical: 8,
+		paddingHorizontal: 16,
+		borderRadius: 8,
 	},
 	linkButtonText: {
-		fontSize: 14,
-		color: '#333',
+		fontSize: 12,
+		fontWeight: '700',
 	},
 });

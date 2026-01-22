@@ -1,11 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useToast } from '@/context/ToastContext';
+import { AnimatedEntry } from '@/components/ui/animated-entry';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface PsychologistProfile {
     id: number;
@@ -16,27 +20,33 @@ interface PsychologistProfile {
 
 export default function ProfileScreen() {
 	const { signOut } = useAuth();
+	const { showToast } = useToast();
 	const [profile, setProfile] = useState<PsychologistProfile | null>(null);
 	const [loading, setLoading] = useState(true);
 
+	const colorScheme = useColorScheme() ?? 'light';
+	const isDark = colorScheme === 'dark';
+
 	const tintColor = useThemeColor({}, 'tint');
-	const borderColor = useThemeColor({}, 'text');
+	const borderColor = useThemeColor({}, 'border');
+	const mutedColor = useThemeColor({}, 'muted');
+	const cardColor = useThemeColor({}, 'card');
 
-	useEffect(() => {
-		fetchProfile();
-	}, []);
-
-	const fetchProfile = async () => {
+	const fetchProfile = useCallback(async () => {
 		try {
 			const response = await api.get('/Psychologist/profile');
 			setProfile(response.data);
 		} catch (error) {
 			console.error('Failed to fetch profile:', error);
-			Alert.alert('Erro', 'Não foi possível carregar o perfil.');
+			showToast('Não foi possível carregar o perfil.', 'error');
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [showToast]);
+
+	useEffect(() => {
+		fetchProfile();
+	}, [fetchProfile]);
 
 	if (loading) {
 		return (
@@ -49,28 +59,56 @@ export default function ProfileScreen() {
 	return (
 		<ThemedView style={styles.container}>
 			<SafeAreaView style={styles.safeArea}>
-				<ThemedText type="title" style={styles.title}>Meu Perfil</ThemedText>
-        
-				<View style={styles.content}>
-					<View style={[styles.infoCard, { borderColor: borderColor + '33' }]}>
-						<ThemedText style={styles.label}>Nome</ThemedText>
-						<ThemedText style={styles.value}>{profile?.name}</ThemedText>
+				<AnimatedEntry style={styles.content}>
+					<View style={styles.header}>
+						<View style={[styles.avatarPlaceholder, { backgroundColor: tintColor + '20' }]}>
+							<IconSymbol name="person.fill" size={40} color={tintColor} />
+						</View>
+						<ThemedText type="title" style={styles.name}>{profile?.name}</ThemedText>
+						<ThemedText style={{ color: mutedColor }}>Psicólogo</ThemedText>
 					</View>
 
-					<View style={[styles.infoCard, { borderColor: borderColor + '33' }]}>
-						<ThemedText style={styles.label}>CRP</ThemedText>
-						<ThemedText style={styles.value}>{profile?.crp}</ThemedText>
-					</View>
+					<View style={styles.section}>
+						<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>INFORMAÇÕES PROFISSIONAIS</ThemedText>
+						<View style={[
+							styles.card, 
+							{ 
+								backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+								borderColor: borderColor 
+							}
+						]}>
+							<View style={styles.infoRow}>
+								<View style={[styles.iconBox, { backgroundColor: tintColor + '15' }]}>
+									<IconSymbol name="doc.text.fill" size={18} color={tintColor} />
+								</View>
+								<View>
+									<ThemedText style={styles.label}>CRP</ThemedText>
+									<ThemedText style={styles.value}>{profile?.crp}</ThemedText>
+								</View>
+							</View>
 
-					<View style={[styles.infoCard, { borderColor: borderColor + '33' }]}>
-						<ThemedText style={styles.label}>Email</ThemedText>
-						<ThemedText style={styles.value}>{profile?.email}</ThemedText>
+							<View style={[styles.divider, { backgroundColor: borderColor }]} />
+
+							<View style={styles.infoRow}>
+								<View style={[styles.iconBox, { backgroundColor: tintColor + '15' }]}>
+									<IconSymbol name="envelope.fill" size={18} color={tintColor} />
+								</View>
+								<View>
+									<ThemedText style={styles.label}>Email</ThemedText>
+									<ThemedText style={styles.value}>{profile?.email}</ThemedText>
+								</View>
+							</View>
+						</View>
 					</View>
           
-					<TouchableOpacity style={styles.button} onPress={signOut}>
-						<ThemedText style={styles.buttonText}>Sair</ThemedText>
+					<TouchableOpacity 
+						style={[styles.logoutButton, { borderColor: '#EF4444' }]} 
+						onPress={signOut}
+					>
+						<IconSymbol name="arrow.right.square" size={20} color="#EF4444" />
+						<ThemedText style={styles.logoutText}>Sair da conta</ThemedText>
 					</TouchableOpacity>
-				</View>
+				</AnimatedEntry>
 			</SafeAreaView>
 		</ThemedView>
 	);
@@ -88,39 +126,78 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
-	title: {
-		margin: 20,
-		textAlign: 'center',
-	},
 	content: {
-		padding: 20,
+		padding: 24,
 	},
-	infoCard: {
-		marginBottom: 20,
-		padding: 15,
-		borderRadius: 10,
+	header: {
+		alignItems: 'center',
+		marginBottom: 40,
+	},
+	avatarPlaceholder: {
+		width: 80,
+		height: 80,
+		borderRadius: 40,
+		justifyContent: 'center',
+		alignItems: 'center',
+		marginBottom: 16,
+	},
+	name: {
+		marginBottom: 4,
+	},
+	section: {
+		marginBottom: 32,
+	},
+	sectionTitle: {
+		fontSize: 12,
+		fontWeight: '700',
+		marginBottom: 12,
+		letterSpacing: 1,
+		textTransform: 'uppercase',
+	},
+	card: {
+		borderRadius: 20,
 		borderWidth: 1,
+		overflow: 'hidden',
+	},
+	infoRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		padding: 16,
+		gap: 16,
+	},
+	iconBox: {
+		width: 40,
+		height: 40,
+		borderRadius: 12,
+		justifyContent: 'center',
+		alignItems: 'center',
 	},
 	label: {
-		fontSize: 14,
-		opacity: 0.7,
-		marginBottom: 5,
-		fontWeight: '600',
+		fontSize: 12,
+		opacity: 0.6,
+		marginBottom: 2,
 	},
 	value: {
-		fontSize: 18,
-		fontWeight: 'bold',
-	},
-	button: {
-		backgroundColor: '#ff4444',
-		paddingVertical: 15,
-		borderRadius: 8,
-		alignItems: 'center',
-		marginTop: 20,
-	},
-	buttonText: {
-		color: '#fff',
 		fontSize: 16,
-		fontWeight: 'bold',
+		fontWeight: '600',
+	},
+	divider: {
+		height: 1,
+		opacity: 0.5,
+		marginLeft: 72, // Align with text
+	},
+	logoutButton: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		padding: 16,
+		borderRadius: 16,
+		borderWidth: 1,
+		gap: 8,
+		marginTop: 'auto',
+	},
+	logoutText: {
+		color: '#EF4444',
+		fontWeight: '600',
 	},
 });

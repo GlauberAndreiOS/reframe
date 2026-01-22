@@ -19,8 +19,7 @@ public class PsychologistController : ControllerBase
         _context = context;
     }
 
-    // GET: api/Psychologist/profile
-    // Retorna o perfil do psicólogo logado
+
     [HttpGet("profile")]
     [Authorize(Roles = "Psychologist")]
     public async Task<ActionResult<object>> GetProfile()
@@ -44,8 +43,7 @@ public class PsychologistController : ControllerBase
         });
     }
 
-    // GET: api/Psychologist/patients
-    // Retorna a lista de pacientes vinculados ao psicólogo logado
+
     [HttpGet("patients")]
     [Authorize(Roles = "Psychologist")]
     public async Task<ActionResult<IEnumerable<object>>> GetMyPatients()
@@ -70,8 +68,7 @@ public class PsychologistController : ControllerBase
         return Ok(result);
     }
 
-    // GET: api/Psychologist/search?name=...
-    // Permite buscar psicólogos (para pacientes se vincularem)
+
     [HttpGet("search")]
     [AllowAnonymous] 
     public async Task<ActionResult<IEnumerable<object>>> SearchPsychologists([FromQuery] string? name, [FromQuery] string? crp)
@@ -98,9 +95,8 @@ public class PsychologistController : ControllerBase
 
         return Ok(result);
     }
-    
-    // GET: api/Psychologist/all
-    // Retorna todos os psicólogos (para listagem inicial no cadastro)
+
+
     [HttpGet("all")]
     [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<object>>> GetAllPsychologists()

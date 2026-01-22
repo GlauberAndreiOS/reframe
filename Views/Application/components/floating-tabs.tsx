@@ -3,60 +3,66 @@ import {
 	View,
 	TouchableOpacity,
 	StyleSheet,
+	Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface Props {
 	state: any;
+	descriptors: any;
 	navigation: any;
-	colorScheme: 'light' | 'dark';
 }
 
-export default function FloatingTabs({
-	                                     state,
-	                                     navigation,
-	                                     colorScheme,
-}: Props) {
+export default function FloatingTabs({ state, descriptors, navigation }: Props) {
 	const insets = useSafeAreaInsets();
+	const colorScheme = useColorScheme() ?? 'light';
+	const isDark = colorScheme === 'dark';
+
+	const backgroundColor = isDark ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+	const activeColor = useThemeColor({}, 'tint');
+	const inactiveColor = useThemeColor({}, 'muted');
 
 	return (
 		<View
 			style={[
 				styles.container,
 				{
-					bottom: insets.bottom + 10,
-					backgroundColor: Colors[colorScheme].background,
-					shadowColor: '#000',
+					bottom: Platform.OS === 'ios' ? insets.bottom : insets.bottom + 20,
+					backgroundColor,
+					borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
 				},
 			]}
 		>
 			{state.routes.map((route: any, index: number) => {
+				const { options } = descriptors[route.key];
 				const focused = state.index === index;
-				const onPress = () => {
-					navigation.navigate(route.name);
-				};
 
-				let iconName: string = '';
-				if (route.name === 'index') iconName = 'person.2.fill';
-				if (route.name === 'profile') iconName = 'person.fill';
+				const onPress = () => {
+					const event = navigation.emit({
+						type: 'tabPress',
+						target: route.key,
+						canPreventDefault: true,
+					});
+
+					if (!focused && !event.defaultPrevented) {
+						navigation.navigate(route.name);
+					}
+				};
 
 				return (
 					<TouchableOpacity
 						key={route.key}
 						onPress={onPress}
 						style={styles.button}
+						activeOpacity={0.7}
 					>
-						<IconSymbol
-							name={iconName}
-							size={28}
-							color={
-								focused
-									? Colors[colorScheme].tint
-									: Colors[colorScheme].muted
-							}
-						/>
+						{options.tabBarIcon && options.tabBarIcon({
+							focused,
+							color: focused ? activeColor : inactiveColor,
+							size: 24
+						})}
 					</TouchableOpacity>
 				);
 			})}
@@ -67,25 +73,28 @@ export default function FloatingTabs({
 const styles = StyleSheet.create({
 	container: {
 		position: 'absolute',
-		left: '50%',
-		transform: [{ translateX: -120 }],
-		width: 240,
+		alignSelf: 'center',
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-around',
 		height: 64,
 		borderRadius: 32,
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		paddingHorizontal: 36,
-		alignItems: 'center',
+		paddingHorizontal: 20,
+		minWidth: 200,
+		borderWidth: 1,
+		shadowColor: '#000',
 		shadowOffset: {
 			width: 0,
-			height: 10,
+			height: 4,
 		},
-		shadowOpacity: 0.15,
-		shadowRadius: 6,
-		elevation: 5,
+		shadowOpacity: 0.1,
+		shadowRadius: 12,
+		elevation: 8,
+		backdropFilter: 'blur(20px)',
 	},
 	button: {
-		flex: 1,
+		padding: 12,
 		alignItems: 'center',
+		justifyContent: 'center',
 	},
 });

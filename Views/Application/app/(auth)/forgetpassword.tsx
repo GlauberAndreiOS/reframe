@@ -1,51 +1,51 @@
 import React, { useState } from 'react';
 import {
 	View,
-	TextInput,
 	TouchableOpacity,
 	StyleSheet,
-	Alert,
 	ActivityIndicator,
 	KeyboardAvoidingView,
-	Platform
+	Platform,
+	Text,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import api from '@/services/api';
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Image } from 'expo-image';
+import { useToast } from '@/context/ToastContext';
+
+import { AmbientBackground } from '@/components/ui/ambient-background';
+import { GlassInput } from '@/components/ui/glass-input';
+import { ReframeLogo } from '@/components/ui/reframe-logo';
+import { AnimatedEntry } from '@/components/ui/animated-entry';
 
 export default function ForgetPassword() {
 	const router = useRouter();
+	const { showToast } = useToast();
 	const [email, setEmail] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
 
-	const textColor = useThemeColor({}, 'text');
 	const tintColor = useThemeColor({}, 'tint');
-	const buttonTextColor = '#FFFFFF';
+	const mutedColor = useThemeColor({}, 'muted');
 
 	const handleResetPassword = async () => {
 		if (!email) {
-			Alert.alert('Erro', 'Por favor, insira seu e-mail.');
+			showToast('Por favor, insira seu e-mail.', 'error');
 			return;
 		}
 
 		setIsLoading(true);
 
 		try {
-			// Assuming the endpoint is /Auth/forgot-password
 			await api.post('/Auth/forgot-password', { email });
 			
-			Alert.alert(
-				'Sucesso', 
-				'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.',
-				[{ text: 'OK', onPress: () => router.back() }]
-			);
+			showToast('Instruções enviadas para o seu e-mail.', 'success');
+			setTimeout(() => router.back(), 2000);
+			
 		} catch (error: any) {
 			console.error('Forgot password error:', error);
 			const errorMessage = error.response?.data || 'Falha ao solicitar recuperação de senha.';
-			Alert.alert('Erro', typeof errorMessage === 'string' ? errorMessage : 'Falha ao solicitar recuperação de senha.');
+			showToast(typeof errorMessage === 'string' ? errorMessage : 'Falha ao solicitar recuperação.', 'error');
 		} finally {
 			setIsLoading(false);
 		}
@@ -53,50 +53,48 @@ export default function ForgetPassword() {
 
 	return (
 		<ThemedView style={styles.container}>
+			<AmbientBackground />
+
 			<KeyboardAvoidingView 
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 				style={styles.keyboardView}
 			>
-				<View style={styles.formContainer}>
-					<View style={styles.logoContainer}>
-						<Image 
-							source={require('@/assets/images/favicon.png')} 
-							style={styles.logo}
-							contentFit="contain"
-						/>
-					</View>
-					<ThemedText type="title" style={styles.title}>Recuperar Senha</ThemedText>
+				<AnimatedEntry style={styles.contentContainer}>
+					<ReframeLogo />
 					
-					<ThemedText style={styles.description}>
-						Insira seu e-mail para receber as instruções de redefinição de senha.
-					</ThemedText>
+					<View style={styles.formSection}>
+						<Text style={[styles.description, { color: mutedColor }]}>
+							Insira seu e-mail para receber as instruções de redefinição de senha.
+						</Text>
 
-					<TextInput
-						style={[styles.input, { color: textColor, borderColor: textColor }]}
-						placeholder="E-mail"
-						placeholderTextColor="#999"
-						value={email}
-						onChangeText={setEmail}
-						autoCapitalize="none"
-						keyboardType="email-address"
-					/>
+						<View style={styles.inputGroup}>
+							<GlassInput 
+								placeholder="E-mail cadastrado"
+								value={email}
+								onChangeText={setEmail}
+								autoCapitalize="none"
+								keyboardType="email-address"
+							/>
+						</View>
 
-					<TouchableOpacity 
-						style={[styles.button, { backgroundColor: tintColor }, isLoading && styles.buttonDisabled]} 
-						onPress={handleResetPassword}
-						disabled={isLoading}
-					>
-						{isLoading ? (
-							<ActivityIndicator color={buttonTextColor} />
-						) : (
-							<ThemedText style={[styles.buttonText, { color: buttonTextColor }]}>Enviar</ThemedText>
-						)}
-					</TouchableOpacity>
+						<TouchableOpacity 
+							style={[styles.primaryButton, { backgroundColor: tintColor }]}
+							onPress={handleResetPassword}
+							disabled={isLoading}
+							activeOpacity={0.8}
+						>
+							{isLoading ? (
+								<ActivityIndicator color="#FFFFFF" />
+							) : (
+								<Text style={styles.primaryButtonText}>ENVIAR INSTRUÇÕES</Text>
+							)}
+						</TouchableOpacity>
 
-					<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-						<ThemedText style={[styles.linkText, { color: tintColor }]}>Voltar para Login</ThemedText>
-					</TouchableOpacity>
-				</View>
+						<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+							<Text style={[styles.backButtonText, { color: mutedColor }]}>Voltar para Login</Text>
+						</TouchableOpacity>
+					</View>
+				</AnimatedEntry>
 			</KeyboardAvoidingView>
 		</ThemedView>
 	);
@@ -105,64 +103,61 @@ export default function ForgetPassword() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+		position: 'relative',
 	},
 	keyboardView: {
 		flex: 1,
 		justifyContent: 'center',
-		padding: 20,
 	},
-	formContainer: {
+	contentContainer: {
+		paddingHorizontal: 24,
 		width: '100%',
-		maxWidth: 400,
+		maxWidth: 600,
 		alignSelf: 'center',
-	},
-	logoContainer: {
 		alignItems: 'center',
+		gap: 40,
 	},
-	logo: {
-		width: 120,
-		height: 120,
-		marginBottom: 20,
-	},
-	title: {
-		marginBottom: 10,
-		textAlign: 'center',
+	formSection: {
+		width: '100%',
+		gap: 32,
 	},
 	description: {
 		textAlign: 'center',
-		marginBottom: 30,
-		fontSize: 16,
+		fontSize: 14,
+		lineHeight: 20,
 		opacity: 0.8,
 	},
-	input: {
-		width: '100%',
-		height: 50,
-		borderWidth: 1,
-		borderRadius: 8,
-		paddingHorizontal: 15,
-		marginBottom: 15,
-		fontSize: 16,
+	inputGroup: {
+		gap: 16,
 	},
-	button: {
+	primaryButton: {
 		width: '100%',
-		height: 50,
-		borderRadius: 8,
-		justifyContent: 'center',
+		height: 64,
+		borderRadius: 16,
 		alignItems: 'center',
-		marginTop: 10,
+		justifyContent: 'center',
+		shadowColor: '#000',
+		shadowOffset: {
+			width: 0,
+			height: 10,
+		},
+		shadowOpacity: 0.3,
+		shadowRadius: 20,
+		elevation: 10,
 	},
-	buttonDisabled: {
-		opacity: 0.7,
-	},
-	buttonText: {
-		fontSize: 18,
-		fontWeight: 'bold',
+	primaryButtonText: {
+		color: '#FFFFFF',
+		fontSize: 12,
+		fontWeight: '900',
+		letterSpacing: 3,
+		textTransform: 'uppercase',
 	},
 	backButton: {
-		marginTop: 20,
 		alignItems: 'center',
+		padding: 10,
 	},
-	linkText: {
-		fontSize: 16,
+	backButtonText: {
+		fontSize: 14,
+		fontWeight: '600',
 	},
 });

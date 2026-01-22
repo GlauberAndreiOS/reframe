@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
 	View,
-	Text,
 	StyleSheet,
 	FlatList,
 	TouchableOpacity,
@@ -11,8 +10,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import api from '@/services/api';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import { ThemedView } from '@/components/themed-view';
+import { ThemedText } from '@/components/themed-text';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { AnimatedEntry } from '@/components/ui/animated-entry';
 
 interface AutomaticThought {
     id: number;
@@ -29,9 +31,13 @@ interface AutomaticThought {
 
 export default function ThoughtsScreen() {
 	const router = useRouter();
-
 	const colorScheme = useColorScheme() ?? 'light';
-	const colors = Colors[colorScheme];
+	const isDark = colorScheme === 'dark';
+
+	const tintColor = useThemeColor({}, 'tint');
+	const cardColor = useThemeColor({}, 'card');
+	const borderColor = useThemeColor({}, 'border');
+	const mutedColor = useThemeColor({}, 'muted');
 
 	const [thoughts, setThoughts] = useState<AutomaticThought[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -59,158 +65,201 @@ export default function ThoughtsScreen() {
 		return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 	};
 
-	const styles = StyleSheet.create({
-		container: {
-			flex: 1,
-			backgroundColor: colors.background,
-		},
-		center: {
-			flex: 1,
-			justifyContent: 'center',
-			alignItems: 'center',
-		},
-		header: {
-			flexDirection: 'row',
-			justifyContent: 'space-between',
-			alignItems: 'center',
-			paddingHorizontal: 20,
-			paddingVertical: 15,
-		},
-		title: {
-			fontSize: 24,
-			fontWeight: 'bold',
-			color: colors.text,
-		},
-		list: {
-			paddingHorizontal: 20,
-			paddingBottom: 70,
-		},
-		card: {
-			backgroundColor: colors.card || '#f9f9f9',
-			padding: 15,
-			borderRadius: 10,
-			marginBottom: 15,
-			borderWidth: 1,
-			borderColor: colors.border || '#eee',
-		},
-		cardHeader: {
-			flexDirection: 'row',
-			justifyContent: 'space-between',
-			marginBottom: 10,
-		},
-		date: {
-			fontSize: 12,
-			color: colors.icon || '#666',
-		},
-		emotion: {
-			fontSize: 12,
-			fontWeight: 'bold',
-			color: colors.tint,
-		},
-		label: {
-			fontSize: 12,
-			color: colors.icon || '#888',
-			marginTop: 10,
-			fontWeight: '600',
-		},
-		content: {
-			fontSize: 16,
-			color: colors.text,
-		},
-		emptyText: {
-			textAlign: 'center',
-			color: colors.icon || '#999',
-			marginTop: 50,
-			fontSize: 16,
-		},
-	});
-
 	return (
-		<SafeAreaView style={styles.container}>
-			<View style={styles.header}>
-				<Text style={styles.title}>Meus Pensamentos</Text>
+		<ThemedView style={styles.container}>
+			<SafeAreaView style={styles.safeArea}>
+				<View style={styles.header}>
+					<View>
+						<ThemedText type="title">Meus Pensamentos</ThemedText>
+						<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
+							Registro diário de emoções
+						</ThemedText>
+					</View>
 
-				<TouchableOpacity
-					onPress={() => router.push('/new-thought')}
-					style={{ padding: 5 }}
-				>
-					<IconSymbol
-						name="plus.circle.fill"
-						size={32}
-						color={colors.tint}
-					/>
-				</TouchableOpacity>
-			</View>
-
-			{loading ? (
-				<View style={styles.center}>
-					<ActivityIndicator size="large" color={colors.tint} />
+					<TouchableOpacity
+						onPress={() => router.push('/(patient)/new-thought')}
+						style={styles.addButton}
+					>
+						<IconSymbol
+							name="plus.circle.fill"
+							size={32}
+							color={tintColor}
+						/>
+					</TouchableOpacity>
 				</View>
-			) : (
-				<FlatList
-					data={thoughts}
-					keyExtractor={(item) => item.id.toString()}
-					contentContainerStyle={styles.list}
-					ListEmptyComponent={
-						<Text style={styles.emptyText}>
-							Nenhum pensamento registrado ainda.
-						</Text>
-					}
-					renderItem={({ item }) => (
-						<View style={styles.card}>
-							<View style={styles.cardHeader}>
-								<Text style={styles.date}>
-									{formatDate(item.date)}
-								</Text>
-								<Text style={styles.emotion}>
-									{item.emotion}
-								</Text>
+
+				{loading ? (
+					<View style={styles.center}>
+						<ActivityIndicator size="large" color={tintColor} />
+					</View>
+				) : (
+					<FlatList
+						data={thoughts}
+						keyExtractor={(item) => item.id.toString()}
+						contentContainerStyle={styles.list}
+						showsVerticalScrollIndicator={false}
+						ListEmptyComponent={
+							<View style={styles.center}>
+								<IconSymbol name="doc.text" size={48} color={mutedColor} />
+								<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+									Nenhum pensamento registrado ainda.
+								</ThemedText>
+								<TouchableOpacity 
+									onPress={() => router.push('/(patient)/new-thought')}
+									style={{ marginTop: 20 }}
+								>
+									<ThemedText style={{ color: tintColor, fontWeight: '600' }}>
+										Registrar meu primeiro pensamento
+									</ThemedText>
+								</TouchableOpacity>
 							</View>
+						}
+						renderItem={({ item, index }) => (
+							<AnimatedEntry delay={index * 100} duration={600}>
+								<View style={[
+									styles.card, 
+									{ 
+										backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+										borderColor: borderColor 
+									}
+								]}>
+									<View style={styles.cardHeader}>
+										<ThemedText style={[styles.date, { color: mutedColor }]}>
+											{formatDate(item.date)}
+										</ThemedText>
+										<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
+											<ThemedText style={[styles.emotion, { color: tintColor }]}>
+												{item.emotion}
+											</ThemedText>
+										</View>
+									</View>
 
-							<Text style={styles.label}>Situação:</Text>
-							<Text style={styles.content}>{item.situation}</Text>
+									<View style={styles.section}>
+										<ThemedText style={[styles.label, { color: mutedColor }]}>SITUAÇÃO</ThemedText>
+										<ThemedText style={styles.content}>{item.situation}</ThemedText>
+									</View>
 
-							<Text style={styles.label}>Pensamento:</Text>
-							<Text style={styles.content}>{item.thought}</Text>
+									<View style={styles.section}>
+										<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTO</ThemedText>
+										<ThemedText style={styles.content}>{item.thought}</ThemedText>
+									</View>
 
-							{!!item.behavior && (
-								<>
-									<Text style={styles.label}>Comportamento:</Text>
-									<Text style={styles.content}>{item.behavior}</Text>
-								</>
-							)}
+									{!!item.behavior && (
+										<View style={styles.section}>
+											<ThemedText style={[styles.label, { color: mutedColor }]}>COMPORTAMENTO</ThemedText>
+											<ThemedText style={styles.content}>{item.behavior}</ThemedText>
+										</View>
+									)}
 
-							{!!item.evidencePro && (
-								<>
-									<Text style={styles.label}>Evidências a favor:</Text>
-									<Text style={styles.content}>{item.evidencePro}</Text>
-								</>
-							)}
+									{!!item.evidencePro && (
+										<View style={styles.section}>
+											<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS A FAVOR</ThemedText>
+											<ThemedText style={styles.content}>{item.evidencePro}</ThemedText>
+										</View>
+									)}
 
-							{!!item.evidenceContra && (
-								<>
-									<Text style={styles.label}>Evidências contra:</Text>
-									<Text style={styles.content}>{item.evidenceContra}</Text>
-								</>
-							)}
+									{!!item.evidenceContra && (
+										<View style={styles.section}>
+											<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS CONTRA</ThemedText>
+											<ThemedText style={styles.content}>{item.evidenceContra}</ThemedText>
+										</View>
+									)}
 
-							{!!item.alternativeThoughts && (
-								<>
-									<Text style={styles.label}>Pensamentos Alternativos:</Text>
-									<Text style={styles.content}>{item.alternativeThoughts}</Text>
-								</>
-							)}
+									{!!item.alternativeThoughts && (
+										<View style={styles.section}>
+											<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTOS ALTERNATIVOS</ThemedText>
+											<ThemedText style={styles.content}>{item.alternativeThoughts}</ThemedText>
+										</View>
+									)}
 
-							{!!item.reevaluation && (
-								<>
-									<Text style={styles.label}>Reavaliação:</Text>
-									<Text style={styles.content}>{item.reevaluation}</Text>
-								</>
-							)}
-						</View>
-					)}
-				/>
-			)}
-		</SafeAreaView>
+									{!!item.reevaluation && (
+										<View style={styles.section}>
+											<ThemedText style={[styles.label, { color: mutedColor }]}>REAVALIAÇÃO</ThemedText>
+											<ThemedText style={styles.content}>{item.reevaluation}</ThemedText>
+										</View>
+									)}
+								</View>
+							</AnimatedEntry>
+						)}
+					/>
+				)}
+			</SafeAreaView>
+		</ThemedView>
 	);
 }
+
+const styles = StyleSheet.create({
+	container: {
+		flex: 1,
+	},
+	safeArea: {
+		flex: 1,
+	},
+	center: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+		padding: 20,
+	},
+	header: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		paddingHorizontal: 24,
+		paddingVertical: 20,
+	},
+	addButton: {
+		padding: 4,
+	},
+	list: {
+		paddingHorizontal: 24,
+		paddingBottom: 100,
+	},
+	card: {
+		padding: 20,
+		borderRadius: 24,
+		marginBottom: 16,
+		borderWidth: 1,
+	},
+	cardHeader: {
+		flexDirection: 'column',
+		alignItems: 'flex-start',
+		marginBottom: 16,
+		gap: 8,
+	},
+	date: {
+		fontSize: 12,
+		fontWeight: '500',
+	},
+	emotionBadge: {
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		borderRadius: 8,
+		alignSelf: 'flex-start',
+	},
+	emotion: {
+		fontSize: 14,
+		fontWeight: '800',
+		textTransform: 'uppercase',
+		letterSpacing: 0.5,
+	},
+	section: {
+		marginBottom: 12,
+	},
+	label: {
+		fontSize: 10,
+		fontWeight: '700',
+		marginBottom: 4,
+		letterSpacing: 1,
+		textTransform: 'uppercase',
+	},
+	content: {
+		fontSize: 15,
+		lineHeight: 22,
+	},
+	emptyText: {
+		textAlign: 'center',
+		marginTop: 16,
+		fontSize: 16,
+	},
+});

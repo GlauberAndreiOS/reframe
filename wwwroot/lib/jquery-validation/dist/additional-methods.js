@@ -20,10 +20,8 @@
 
 	function stripHtml( value ) {
 
-		// Remove html tags and space chars
 		return value.replace( /<.[^<>]*?>/g, " " ).replace( /&nbsp;|&#160;/gi, " " )
 
-		// Remove punctuation
 		.replace( /[.(),;:!?%#$'\"_+=\/\-“”’]*/g, "" );
 	}
 
@@ -54,20 +52,17 @@ $.validator.addMethod( "abaRoutingNumber", function( value ) {
 	var tokens = value.split( "" );
 	var length = tokens.length;
 
-	// Length Check
 	if ( length !== 9 ) {
 		return false;
 	}
 
-	// Calc the checksum
-	// https://en.wikipedia.org/wiki/ABA_routing_transit_number
+
 	for ( var i = 0; i < length; i += 3 ) {
 		checksum +=	parseInt( tokens[ i ], 10 )     * 3 +
 					parseInt( tokens[ i + 1 ], 10 ) * 7 +
 					parseInt( tokens[ i + 2 ], 10 );
 	}
 
-	// If not zero and divisible by 10 then valid
 	if ( checksum !== 0 && checksum % 10 === 0 ) {
 		return true;
 	}
@@ -75,36 +70,30 @@ $.validator.addMethod( "abaRoutingNumber", function( value ) {
 	return false;
 }, "Please enter a valid routing number." );
 
-// Accept a value from a file input based on a required mimetype
 $.validator.addMethod( "accept", function( value, element, param ) {
 
-	// Split mime on commas in case we have multiple types we can accept
 	var typeParam = typeof param === "string" ? param.replace( /\s/g, "" ) : "image/*",
 		optionalValue = this.optional( element ),
 		i, file, regex;
 
-	// Element is optional
 	if ( optionalValue ) {
 		return optionalValue;
 	}
 
 	if ( $( element ).attr( "type" ) === "file" ) {
 
-		// Escape string to be used in the regex
-		// see: https://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
-		// Escape also "/*" as "/.*" as a wildcard
+
+
 		typeParam = typeParam
 				.replace( /[\-\[\]\/\{\}\(\)\+\?\.\\\^\$\|]/g, "\\$&" )
 				.replace( /,/g, "|" )
 				.replace( /\/\*/g, "/.*" );
 
-		// Check if the element has a FileList before checking each file
 		if ( element.files && element.files.length ) {
 			regex = new RegExp( ".?(" + typeParam + ")$", "i" );
 			for ( i = 0; i < element.files.length; i++ ) {
 				file = element.files[ i ];
 
-				// Grab the mimetype from the loaded file, verify it matches
 				if ( !file.type.match( regex ) ) {
 					return false;
 				}
@@ -112,7 +101,6 @@ $.validator.addMethod( "accept", function( value, element, param ) {
 		}
 	}
 
-	// Either return true because we've validated each file, or because the
 	// browser does not support element.files and the FileList feature
 	return true;
 }, $.validator.format( "Please enter a value with a valid mimetype." ) );

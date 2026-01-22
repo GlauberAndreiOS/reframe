@@ -1,25 +1,29 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import FloatingTabs from '@/components/floating-tabs';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function TabsPsychologistLayout() {
-	const colorScheme = useColorScheme() ?? 'light';
-
 	return (
 		<Tabs
 			screenOptions={{
 				headerShown: false,
 			}}
-			tabBar={(props) => (
-				<FloatingTabs
-					{...props}
-					colorScheme={colorScheme}
-				/>
-			)}
+			tabBar={(props) => <FloatingTabs {...props} />}
 		>
-			<Tabs.Screen name="index" />
-			<Tabs.Screen name="profile" />
+			<Tabs.Screen 
+				name="index" 
+				options={{
+					title: 'Pacientes',
+					tabBarIcon: ({ color }) => <IconSymbol name="person.2.fill" size={24} color={color} />,
+				}}
+			/>
+			<Tabs.Screen 
+				name="profile" 
+				options={{
+					title: 'Perfil',
+					tabBarIcon: ({ color }) => <IconSymbol name="person.fill" size={24} color={color} />,
+				}}
+			/>
 		</Tabs>
 	);
 }

@@ -6,6 +6,9 @@ import api from '@/services/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AnimatedEntry } from '@/components/ui/animated-entry';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 interface Patient {
     id: number;
@@ -14,9 +17,13 @@ interface Patient {
 
 export default function PatientsScreen() {
 	const router = useRouter();
-	const borderColor = useThemeColor({}, 'text');
-	const cardBackgroundColor = useThemeColor({}, 'background');
+	const colorScheme = useColorScheme() ?? 'light';
+	const isDark = colorScheme === 'dark';
+
 	const tintColor = useThemeColor({}, 'tint');
+	const borderColor = useThemeColor({}, 'border');
+	const cardColor = useThemeColor({}, 'card');
+	const mutedColor = useThemeColor({}, 'muted');
 
 	const [patients, setPatients] = useState<Patient[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -42,7 +49,12 @@ export default function PatientsScreen() {
 	return (
 		<ThemedView style={styles.container}>
 			<SafeAreaView style={styles.safeArea}>
-				<ThemedText type="title" style={styles.title}>Meus Pacientes</ThemedText>
+				<View style={styles.header}>
+					<ThemedText type="title">Meus Pacientes</ThemedText>
+					<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
+						Acompanhamento clínico
+					</ThemedText>
+				</View>
 				
 				{loading ? (
 					<View style={styles.center}>
@@ -52,18 +64,40 @@ export default function PatientsScreen() {
 					<FlatList
 						data={patients}
 						keyExtractor={(item) => item.id.toString()}
-						renderItem={({ item }) => (
-							<TouchableOpacity 
-								style={[styles.card, { backgroundColor: cardBackgroundColor, borderColor: borderColor + '33' }]}
-								onPress={() => router.push({ pathname: '/(psychologist)/patient/[id]', params: { id: item.id, name: item.name } })}
-							>
-								<ThemedText style={styles.name}>{item.name}</ThemedText>
-							</TouchableOpacity>
-						)}
 						contentContainerStyle={styles.list}
+						showsVerticalScrollIndicator={false}
 						ListEmptyComponent={
-							<ThemedText style={styles.emptyText}>Nenhum paciente vinculado.</ThemedText>
+							<View style={styles.center}>
+								<IconSymbol name="person.2" size={48} color={mutedColor} />
+								<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+									Nenhum paciente vinculado.
+								</ThemedText>
+							</View>
 						}
+						renderItem={({ item, index }) => (
+							<AnimatedEntry delay={index * 100} duration={600}>
+								<TouchableOpacity 
+									style={[
+										styles.card, 
+										{ 
+											backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+											borderColor: borderColor 
+										}
+									]}
+									onPress={() => router.push({ pathname: '/(psychologist)/patient/[id]', params: { id: item.id, name: item.name } })}
+									activeOpacity={0.7}
+								>
+									<View style={[styles.avatar, { backgroundColor: tintColor + '20' }]}>
+										<IconSymbol name="person.fill" size={20} color={tintColor} />
+									</View>
+									<View style={styles.info}>
+										<ThemedText style={styles.name}>{item.name}</ThemedText>
+										<ThemedText style={{ color: mutedColor, fontSize: 12 }}>Ver registros</ThemedText>
+									</View>
+									<IconSymbol name="chevron.right" size={20} color={mutedColor} />
+								</TouchableOpacity>
+							</AnimatedEntry>
+						)}
 					/>
 				)}
 			</SafeAreaView>
@@ -78,32 +112,47 @@ const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
 	},
+	header: {
+		paddingHorizontal: 24,
+		paddingVertical: 20,
+	},
 	center: {
 		flex: 1,
 		justifyContent: 'center',
 		alignItems: 'center',
-	},
-	title: {
-		margin: 20,
+		padding: 20,
 	},
 	list: {
-		paddingHorizontal: 20,
-		paddingBottom: 70,
+		paddingHorizontal: 24,
+		paddingBottom: 100,
 	},
 	card: {
-		padding: 15,
-		borderRadius: 10,
-		marginBottom: 15,
+		flexDirection: 'row',
+		alignItems: 'center',
+		padding: 16,
+		borderRadius: 20,
+		marginBottom: 12,
 		borderWidth: 1,
 	},
+	avatar: {
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		justifyContent: 'center',
+		alignItems: 'center',
+		marginRight: 16,
+	},
+	info: {
+		flex: 1,
+	},
 	name: {
-		fontSize: 18,
+		fontSize: 16,
 		fontWeight: '600',
+		marginBottom: 2,
 	},
 	emptyText: {
 		textAlign: 'center',
-		marginTop: 50,
-		opacity: 0.6,
+		marginTop: 16,
 		fontSize: 16,
 	},
 });
