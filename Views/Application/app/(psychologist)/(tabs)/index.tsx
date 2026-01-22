@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, View } from 'react-native';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -9,6 +9,9 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AnimatedEntry } from '@/components/ui/animated-entry';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useToast } from '@/context/ToastContext';
+import { useConfirm } from '@/context/ConfirmContext';
+import { PsychologistPickerModal } from '@/components/ui/psychologist-picker-modal';
 
 interface Patient {
     id: number;
@@ -17,6 +20,8 @@ interface Patient {
 
 export default function PatientsScreen() {
 	const router = useRouter();
+	const { showToast } = useToast();
+	const { confirm } = useConfirm();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
@@ -27,8 +32,12 @@ export default function PatientsScreen() {
 
 	const [patients, setPatients] = useState<Patient[]>([]);
 	const [loading, setLoading] = useState(true);
+	
+	// Transfer Logic
+	const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
+	const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
-	const fetchPatients = async () => {
+	const fetchPatients = useCallback(async () => {
 		setLoading(true);
 		try {
 			const response = await api.get('/Psychologist/patients');
@@ -38,13 +47,53 @@ export default function PatientsScreen() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
 
 	useFocusEffect(
 		React.useCallback(() => {
-			fetchPatients();
-		}, [])
+			void fetchPatients();
+		}, [fetchPatients])
 	);
+
+	const handleUnlink = (patientId: number, patientName: string) => {
+		confirm({
+			title: 'Desvincular Paciente',
+			message: `Tem certeza que deseja desvincular ${patientName}? Esta ação não pode ser desfeita.`,
+			confirmText: 'Desvincular',
+			isDestructive: true,
+			onConfirm: async () => {
+				try {
+					await api.put(`/Psychologist/patient/${patientId}/unlink`);
+					showToast('Paciente desvinculado com sucesso.', 'success');
+					void fetchPatients();
+				} catch (error) {
+					console.error('Failed to unlink patient:', error);
+					showToast('Falha ao desvincular paciente.', 'error');
+				}
+			}
+		});
+	};
+
+	const openTransferModal = (patientId: number) => {
+		setSelectedPatientId(patientId);
+		setIsTransferModalVisible(true);
+	};
+
+	const handleTransfer = async (targetPsychologistId: number | null) => {
+		setIsTransferModalVisible(false);
+		if (!targetPsychologistId || !selectedPatientId) return;
+
+		try {
+			await api.put(`/Psychologist/patient/${selectedPatientId}/transfer/${targetPsychologistId}`);
+			showToast('Paciente transferido com sucesso.', 'success');
+			void fetchPatients();
+		} catch (error) {
+			console.error('Failed to transfer patient:', error);
+			showToast('Falha ao transferir paciente.', 'error');
+		} finally {
+			setSelectedPatientId(null);
+		}
+	};
 
 	return (
 		<ThemedView style={styles.container}>
@@ -76,7 +125,7 @@ export default function PatientsScreen() {
 						}
 						renderItem={({ item, index }) => (
 							<AnimatedEntry delay={index * 100} duration={600}>
-								<TouchableOpacity 
+								<View 
 									style={[
 										styles.card, 
 										{ 
@@ -84,22 +133,56 @@ export default function PatientsScreen() {
 											borderColor: borderColor 
 										}
 									]}
-									onPress={() => router.push({ pathname: '/(psychologist)/patient/[id]', params: { id: item.id, name: item.name } })}
-									activeOpacity={0.7}
 								>
-									<View style={[styles.avatar, { backgroundColor: tintColor + '20' }]}>
-										<IconSymbol name="person.fill" size={20} color={tintColor} />
+									<View style={styles.cardContent}>
+										<View style={[styles.avatar, { backgroundColor: tintColor + '20' }]}>
+											<IconSymbol name="person.fill" size={24} color={tintColor} />
+										</View>
+										<ThemedText numberOfLines={1} style={styles.name}>{item.name}</ThemedText>
 									</View>
-									<View style={styles.info}>
-										<ThemedText style={styles.name}>{item.name}</ThemedText>
-										<ThemedText style={{ color: mutedColor, fontSize: 12 }}>Ver registros</ThemedText>
+
+									<View style={[styles.actions, { borderTopColor: borderColor + '33' }]}>
+										<TouchableOpacity 
+											style={styles.actionButton}
+											onPress={() => router.push({ pathname: '/(psychologist)/patient/[id]', params: { id: item.id, name: item.name } })}
+										>
+											<IconSymbol name="doc.text.fill" size={20} color={tintColor} />
+											<ThemedText style={[styles.actionText, { color: tintColor }]}>Registros</ThemedText>
+										</TouchableOpacity>
+
+										<View style={[styles.verticalDivider, { backgroundColor: borderColor }]} />
+
+										<TouchableOpacity 
+											style={styles.actionButton}
+											onPress={() => openTransferModal(item.id)}
+										>
+											<IconSymbol name="arrow.2.squarepath" size={20} color={mutedColor} />
+											<ThemedText style={[styles.actionText, { color: mutedColor }]}>Transferir</ThemedText>
+										</TouchableOpacity>
+										
+										<View style={[styles.verticalDivider, { backgroundColor: borderColor }]} />
+
+										<TouchableOpacity 
+											style={styles.actionButton}
+											onPress={() => handleUnlink(item.id, item.name)}
+										>
+											<IconSymbol name="person.slash.fill" size={20} color="#EF4444" />
+											<ThemedText style={[styles.actionText, { color: '#EF4444' }]}>Desvincular</ThemedText>
+										</TouchableOpacity>
 									</View>
-									<IconSymbol name="chevron.right" size={20} color={mutedColor} />
-								</TouchableOpacity>
+								</View>
 							</AnimatedEntry>
 						)}
 					/>
 				)}
+
+				<PsychologistPickerModal
+					visible={isTransferModalVisible}
+					onClose={() => setIsTransferModalVisible(false)}
+					onSelect={handleTransfer}
+					showUnlinkOption={false}
+					title="Transferir para..."
+				/>
 			</SafeAreaView>
 		</ThemedView>
 	);
@@ -127,28 +210,50 @@ const styles = StyleSheet.create({
 		paddingBottom: 100,
 	},
 	card: {
+		borderRadius: 20,
+		marginBottom: 16,
+		borderWidth: 1,
+		overflow: 'hidden',
+	},
+	cardContent: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		padding: 16,
-		borderRadius: 20,
-		marginBottom: 12,
-		borderWidth: 1,
+		padding: 20,
+		gap: 16,
 	},
 	avatar: {
-		width: 48,
-		height: 48,
-		borderRadius: 24,
+		width: 56,
+		height: 56,
+		borderRadius: 28,
 		justifyContent: 'center',
 		alignItems: 'center',
-		marginRight: 16,
-	},
-	info: {
-		flex: 1,
 	},
 	name: {
-		fontSize: 16,
+		fontSize: 18,
+		fontWeight: '700',
+		flex: 1,
+	},
+	actions: {
+		flexDirection: 'row',
+		borderTopWidth: 1,
+		alignItems: 'center',
+	},
+	actionButton: {
+		flex: 1,
+		flexDirection: 'column',
+		alignItems: 'center',
+		justifyContent: 'center',
+		paddingVertical: 12,
+		gap: 4,
+	},
+	actionText: {
+		fontSize: 10,
 		fontWeight: '600',
-		marginBottom: 2,
+	},
+	verticalDivider: {
+		width: 1,
+		height: '60%',
+		opacity: 0.2,
 	},
 	emptyText: {
 		textAlign: 'center',

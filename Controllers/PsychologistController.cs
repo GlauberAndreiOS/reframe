@@ -114,4 +114,55 @@ public class PsychologistController : ControllerBase
 
         return Ok(result);
     }
+
+    // PUT: api/Psychologist/patient/{patientId}/unlink
+    [HttpPut("patient/{patientId}/unlink")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<IActionResult> UnlinkPatient(int patientId)
+    {
+        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var psychologist = await _context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (psychologist == null) return NotFound("Psychologist profile not found.");
+
+        var patient = await _context.Patients.FindAsync(patientId);
+        if (patient == null) return NotFound("Patient not found.");
+
+        if (patient.PsychologistId != psychologist.Id)
+        {
+            return BadRequest("This patient is not linked to you.");
+        }
+
+        patient.PsychologistId = null;
+        await _context.SaveChangesAsync();
+
+        return Ok("Patient unlinked successfully.");
+    }
+
+    // PUT: api/Psychologist/patient/{patientId}/transfer/{targetPsychologistId}
+    [HttpPut("patient/{patientId}/transfer/{targetPsychologistId}")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<IActionResult> TransferPatient(int patientId, int targetPsychologistId)
+    {
+        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var currentPsychologist = await _context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (currentPsychologist == null) return NotFound("Current psychologist profile not found.");
+
+        var patient = await _context.Patients.FindAsync(patientId);
+        if (patient == null) return NotFound("Patient not found.");
+
+        if (patient.PsychologistId != currentPsychologist.Id)
+        {
+            return BadRequest("This patient is not linked to you.");
+        }
+
+        var targetPsychologist = await _context.Psychologists.FindAsync(targetPsychologistId);
+        if (targetPsychologist == null) return NotFound("Target psychologist not found.");
+
+        patient.PsychologistId = targetPsychologistId;
+        await _context.SaveChangesAsync();
+
+        return Ok("Patient transferred successfully.");
+    }
 }

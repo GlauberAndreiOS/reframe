@@ -64,8 +64,13 @@ export default function ProfileScreen() {
 						<View style={[styles.avatarPlaceholder, { backgroundColor: tintColor + '20' }]}>
 							<IconSymbol name="person.fill" size={40} color={tintColor} />
 						</View>
-						<ThemedText type="title" style={styles.name}>{profile?.name}</ThemedText>
-						<ThemedText style={{ color: mutedColor }}>Psicólogo</ThemedText>
+						<ThemedText 
+							type="title" 
+							style={styles.name} 
+							numberOfLines={1}
+						>
+							{profile?.name}
+						</ThemedText>
 					</View>
 
 					<View style={styles.section}>
@@ -143,6 +148,7 @@ const styles = StyleSheet.create({
 	},
 	name: {
 		marginBottom: 4,
+		textAlign: 'center',
 	},
 	section: {
 		marginBottom: 32,

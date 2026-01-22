@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '@/services/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -63,95 +62,118 @@ export default function PatientThoughtsScreen() {
 
 	return (
 		<ThemedView style={styles.container}>
-			<SafeAreaView style={styles.safeArea}>
-				<Stack.Screen 
-					options={{ 
-						title: name as string, 
-						headerBackTitle: 'Voltar',
-						headerStyle: { backgroundColor: 'transparent' },
-						headerTransparent: true,
-						headerTintColor: tintColor,
-					}} 
-				/>
-        
-				<View style={styles.headerSpacer} />
+			<Stack.Screen 
+				options={{ 
+					title: name as string, 
+					headerBackTitle: 'Voltar',
+					headerStyle: { backgroundColor: 'transparent' },
+					headerTransparent: true,
+					headerTintColor: tintColor,
+				}} 
+			/>
+	
+			<View style={styles.headerSpacer} />
 
-				<View style={styles.header}>
-					<ThemedText type="title">Pensamentos de {name}</ThemedText>
-					<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
-						Histórico de registros
-					</ThemedText>
+			<View style={styles.header}>
+				<ThemedText type="title">Pensamentos de {name}</ThemedText>
+				<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
+					Histórico de registros
+				</ThemedText>
+			</View>
+
+			{loading ? (
+				<View style={styles.center}>
+					<ActivityIndicator size="large" color={tintColor} />
 				</View>
-
-				{loading ? (
-					<View style={styles.center}>
-						<ActivityIndicator size="large" color={tintColor} />
-					</View>
-				) : (
-					<FlatList
-						data={thoughts}
-						keyExtractor={(item) => item.id.toString()}
-						contentContainerStyle={styles.list}
-						showsVerticalScrollIndicator={false}
-						ListEmptyComponent={
-							<View style={styles.center}>
-								<IconSymbol name="doc.text" size={48} color={mutedColor} />
-								<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
-									Nenhum pensamento registrado por este paciente.
-								</ThemedText>
-							</View>
-						}
-						renderItem={({ item, index }) => (
-							<AnimatedEntry delay={index * 100} duration={600}>
-								<View style={[
-									styles.card, 
-									{ 
-										backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-										borderColor: borderColor 
-									}
-								]}>
-									<View style={styles.cardHeader}>
-										<ThemedText style={[styles.date, { color: mutedColor }]}>
-											{formatDate(item.date)}
+			) : (
+				<FlatList
+					data={thoughts}
+					keyExtractor={(item) => item.id.toString()}
+					contentContainerStyle={styles.list}
+					showsVerticalScrollIndicator={false}
+					ListEmptyComponent={
+						<View style={styles.center}>
+							<IconSymbol name="doc.text" size={48} color={mutedColor} />
+							<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+								Nenhum pensamento registrado por este paciente.
+							</ThemedText>
+						</View>
+					}
+					renderItem={({ item, index }) => (
+						<AnimatedEntry delay={index * 100} duration={600}>
+							<View style={[
+								styles.card, 
+								{ 
+									backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+									borderColor: borderColor 
+								}
+							]}>
+								<View style={styles.cardHeader}>
+									<ThemedText style={[styles.date, { color: mutedColor }]}>
+										{formatDate(item.date)}
+									</ThemedText>
+									<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
+										<ThemedText style={[styles.emotion, { color: tintColor }]}>
+											{item.emotion}
 										</ThemedText>
-										<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
-											<ThemedText style={[styles.emotion, { color: tintColor }]}>
-												{item.emotion}
-											</ThemedText>
-										</View>
 									</View>
-
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>SITUAÇÃO</ThemedText>
-										<ThemedText style={styles.content}>{item.situation}</ThemedText>
-									</View>
-
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTO</ThemedText>
-										<ThemedText style={styles.content}>{item.thought}</ThemedText>
-									</View>
-
-									{!!item.reevaluation && (
-										<View style={[styles.section, styles.reevaluationSection, { backgroundColor: tintColor + '10', borderColor: tintColor + '30' }]}>
-											<ThemedText style={[styles.label, { color: tintColor }]}>REAVALIAÇÃO</ThemedText>
-											<ThemedText style={styles.content}>{item.reevaluation}</ThemedText>
-										</View>
-									)}
 								</View>
-							</AnimatedEntry>
-						)}
-					/>
-				)}
-			</SafeAreaView>
+
+								<View style={styles.section}>
+									<ThemedText style={[styles.label, { color: mutedColor }]}>SITUAÇÃO</ThemedText>
+									<ThemedText style={styles.content}>{item.situation}</ThemedText>
+								</View>
+
+								<View style={styles.section}>
+									<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTO</ThemedText>
+									<ThemedText style={styles.content}>{item.thought}</ThemedText>
+								</View>
+
+								{!!item.behavior && (
+									<View style={styles.section}>
+										<ThemedText style={[styles.label, { color: mutedColor }]}>COMPORTAMENTO</ThemedText>
+										<ThemedText style={styles.content}>{item.behavior}</ThemedText>
+									</View>
+								)}
+
+								{!!item.evidencePro && (
+									<View style={styles.section}>
+										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS A FAVOR</ThemedText>
+										<ThemedText style={styles.content}>{item.evidencePro}</ThemedText>
+									</View>
+								)}
+
+								{!!item.evidenceContra && (
+									<View style={styles.section}>
+										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS CONTRA</ThemedText>
+										<ThemedText style={styles.content}>{item.evidenceContra}</ThemedText>
+									</View>
+								)}
+
+								{!!item.alternativeThoughts && (
+									<View style={styles.section}>
+										<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTOS ALTERNATIVOS</ThemedText>
+										<ThemedText style={styles.content}>{item.alternativeThoughts}</ThemedText>
+									</View>
+								)}
+
+								{!!item.reevaluation && (
+									<View style={styles.section}>
+										<ThemedText style={[styles.label, { color: mutedColor }]}>REAVALIAÇÃO</ThemedText>
+										<ThemedText style={styles.content}>{item.reevaluation}</ThemedText>
+									</View>
+								)}
+							</View>
+						</AnimatedEntry>
+					)}
+				/>
+			)}
 		</ThemedView>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: {
-		flex: 1,
-	},
-	safeArea: {
 		flex: 1,
 	},
 	headerSpacer: {
@@ -178,33 +200,29 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 	},
 	cardHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
+		flexDirection: 'column',
+		alignItems: 'flex-start',
 		marginBottom: 16,
+		gap: 8,
 	},
 	date: {
 		fontSize: 12,
 		fontWeight: '500',
 	},
 	emotionBadge: {
-		paddingHorizontal: 10,
-		paddingVertical: 4,
-		borderRadius: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		borderRadius: 8,
+		alignSelf: 'flex-start',
 	},
 	emotion: {
-		fontSize: 12,
-		fontWeight: '700',
+		fontSize: 14,
+		fontWeight: '800',
 		textTransform: 'uppercase',
+		letterSpacing: 0.5,
 	},
 	section: {
 		marginBottom: 12,
-	},
-	reevaluationSection: {
-		marginTop: 8,
-		padding: 12,
-		borderRadius: 12,
-		borderWidth: 1,
 	},
 	label: {
 		fontSize: 10,
