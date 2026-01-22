@@ -26,12 +26,18 @@ if (File.Exists(dotenv))
     }
 }
 
+// Lógica para capturar o ambiente via CLI (ex: dotnet run seed Homolog)
+string? cliEnv = null;
+if (args.Length > 0 && args[0].ToLower() == "seed")
+{
+    cliEnv = args.Length > 1 ? args[1] : "Dev";
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
@@ -49,14 +55,54 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
 {
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    string connectionStringName = "DefaultConnection";
+
+    // Se estamos rodando via CLI (Seed), usamos o ambiente passado por argumento
+    if (!string.IsNullOrEmpty(cliEnv))
+    {
+        connectionStringName = cliEnv.ToLower() switch
+        {
+            "prod" => "ProdConnection",
+            "homolog" => "HomologConnection",
+            "dev" => "DevConnection",
+            _ => "DefaultConnection"
+        };
+    }
+    else 
+    {
+        // Se estamos rodando via Web, tentamos pegar do Header
+        var httpContext = serviceProvider.GetService<IHttpContextAccessor>()?.HttpContext;
+        var envHeader = httpContext?.Request.Headers["X-Context-Application"].ToString();
+        
+        if (!string.IsNullOrEmpty(envHeader))
+        {
+            connectionStringName = envHeader.ToLower() switch
+            {
+                "prod" => "ProdConnection",
+                "homolog" => "HomologConnection",
+                "dev" => "DevConnection",
+                _ => "DefaultConnection"
+            };
+        }
+    }
+
+    var connectionString = builder.Configuration.GetConnectionString(connectionStringName);
+    
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    }
+
+    options.UseSqlServer(connectionString);
 });
 
 builder.Services.AddScoped<IEmailService, EmailService>();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme) // Define o esquema padrão
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -82,25 +128,31 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// *** MODO SEED ***
+if (args.Length > 0 && args[0].ToLower() == "seed")
 {
-    var services = scope.ServiceProvider;
-    try
+    using (var scope = app.Services.CreateScope())
     {
-        var context = services.GetRequiredService<ApplicationDbContext>();
-
-
-
-
-
-        context.Database.Migrate(); // Cria o banco se não existir e aplica migrations pendentes
+        var services = scope.ServiceProvider;
+        try
+        {
+            var context = services.GetRequiredService<ApplicationDbContext>();
+            Console.WriteLine($"Connecting to database for environment: {cliEnv}...");
+            
+            // Garante que o banco existe antes de seedar
+            context.Database.EnsureCreated();
+            
+            await DataSeeder.SeedAsync(context);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred while seeding the database: {ex.Message}");
+        }
     }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Ocorreu um erro ao aplicar as migrações do banco de dados.");
-    }
+    return; // Encerra a aplicação após o seed
 }
+
+// *** MODO WEB ***
 
 if (app.Environment.IsDevelopment())
 {
@@ -108,17 +160,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "v1");
-        options.RoutePrefix = string.Empty; // Define o Swagger como página inicial (raiz)
+        options.RoutePrefix = string.Empty;
     });
 }
 
 app.UseRouting();
-
-app.UseCors("AllowAll"); // Aplica a política de CORS
-
+app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
-
-app.MapControllers(); // Mapeia apenas os controllers de API
+app.MapControllers();
 
 app.Run();

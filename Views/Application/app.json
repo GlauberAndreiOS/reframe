@@ -4,7 +4,7 @@
     "slug": "reframe",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/favicon.png",
+    "icon": "./assets/images/logo(Dark).png",
     "scheme": "application",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -17,7 +17,7 @@
       "backgroundColor": "#151718",
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/favicon.png",
+        "foregroundImage": "./assets/images/logo(Dark).png",
         "backgroundColor": "#151718"
       },
       "package": "com.gandreidev.reframe"
@@ -27,13 +27,13 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.png", 
+          "image": "assets/images/logo(Light).png", 
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#151718",
           "dark": {
             "backgroundColor": "#151718",
-            "image": "./assets/images/splash.png"
+            "image": "assets/images/logo(Dark).png"
           }
         }
       ]

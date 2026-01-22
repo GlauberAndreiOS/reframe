@@ -5,6 +5,7 @@ const api = axios.create({
 	baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5088/api',
 	headers: {
 		'Content-Type': 'application/json',
+		'X-Context-Application': process.env.EXPO_PUBLIC_APP_ENV || 'Dev',
 	},
 });
 
