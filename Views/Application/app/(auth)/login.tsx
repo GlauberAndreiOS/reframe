@@ -50,7 +50,7 @@ export default function Login() {
 			});
 
 			const { token, userType } = response.data;
-			await signIn(token, userType);
+			await signIn(token, userType, username);
       
 		} catch (error: any) {
 			console.error('Login error:', error);

@@ -106,12 +106,10 @@ builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =
     }
 
     // LOG DE DEBUG
-    // Atenção: Isso vai logar a cada requisição que instanciar o contexto.
-    // Em produção, remova ou mude o nível de log.
     var logger = serviceProvider.GetService<ILogger<Program>>();
     logger?.LogInformation($"[DbContext] Source: {contextSource} | Connection: {connectionStringName}");
 
-    options.UseSqlServer(connectionString);
+    options.UseNpgsql(connectionString);
 });
 
 builder.Services.AddScoped<IEmailService, EmailService>();

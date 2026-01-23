@@ -6,24 +6,14 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_APP_ENV": "Dev"
-      }
+      "distribution": "internal"
     },
     "preview": {
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_APP_ENV": "Homolog"
       }
     },
-    "production": {
-      "env": {
-        "EXPO_PUBLIC_APP_ENV": "Prod"
-      }
-    }
+    "production": {}
   },
   "submit": {
     "production": {}

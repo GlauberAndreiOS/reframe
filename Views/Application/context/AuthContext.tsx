@@ -14,7 +14,7 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-	signIn: (token: string, userType: number) => Promise<void>;
+	signIn: (token: string, userType: number, email?: string) => Promise<void>;
 	signOut: () => Promise<void>;
 }
 
@@ -69,11 +69,21 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [auth, segments]);
 
-	const signIn = async (token: string, userType: number) => {
-		await Promise.all([
+	const signIn = async (token: string, userType: number, email?: string) => {
+		const promises = [
 			SecureStore.setItemAsync('token', token),
 			SecureStore.setItemAsync('userType', userType.toString()),
-		]);
+		];
+
+		if (email) {
+			let env = 'Prod'; // Default
+			const lower = email.toLowerCase();
+			if (lower.includes('@reframe.gandrei.dev.br')) env = 'Dev';
+			if (lower.includes('@reframe-homolog.gandrei.dev.br')) env = 'Homolog';
+			promises.push(SecureStore.setItemAsync('app_env', env));
+		}
+
+		await Promise.all(promises);
 
 		setAuth({
 			token,
@@ -85,6 +95,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 		await Promise.all([
 			SecureStore.deleteItemAsync('token'),
 			SecureStore.deleteItemAsync('userType'),
+			SecureStore.deleteItemAsync('app_env'),
 		]);
 
 		setAuth({
