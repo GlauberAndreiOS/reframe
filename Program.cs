@@ -60,6 +60,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
 {
     string connectionStringName = "DefaultConnection";
+    string contextSource = "Default";
 
     // Se estamos rodando via CLI (Seed), usamos o ambiente passado por argumento
     if (!string.IsNullOrEmpty(cliEnv))
@@ -71,6 +72,7 @@ builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =
             "dev" => "DevConnection",
             _ => "DefaultConnection"
         };
+        contextSource = $"CLI ({cliEnv})";
     }
     else 
     {
@@ -87,6 +89,11 @@ builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =
                 "dev" => "DevConnection",
                 _ => "DefaultConnection"
             };
+            contextSource = $"Header ({envHeader})";
+        }
+        else
+        {
+            contextSource = "Header Missing (Default)";
         }
     }
 
@@ -95,7 +102,14 @@ builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =
     if (string.IsNullOrEmpty(connectionString))
     {
         connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        connectionStringName = "DefaultConnection (Fallback)";
     }
+
+    // LOG DE DEBUG
+    // Atenção: Isso vai logar a cada requisição que instanciar o contexto.
+    // Em produção, remova ou mude o nível de log.
+    var logger = serviceProvider.GetService<ILogger<Program>>();
+    logger?.LogInformation($"[DbContext] Source: {contextSource} | Connection: {connectionStringName}");
 
     options.UseSqlServer(connectionString);
 });
