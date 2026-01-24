@@ -3,8 +3,10 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using reframe.Application.Tenancy;
 using reframe.Data;
 using reframe.Services;
+using reframe.Web;
 
 #region Load .env
 var root = Directory.GetCurrentDirectory();
@@ -49,24 +51,19 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddHttpContextAccessor();
 
-#region Tenant Whitelist
-var tenantDatabases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-{
-    ["Dev"] = "reframeDB_Dev",
-    ["Homolog"] = "reframeDB_Homolog",
-    ["Prod"] = "reframeDB_Prod"
-};
+#region Tenancy Services
+builder.Services.AddScoped<TenantResolver>();
+builder.Services.AddScoped<TenantDatabaseInitializer>();
 #endregion
 
 #region DbContext
 builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
-    var httpContext = sp.GetService<IHttpContextAccessor>()?.HttpContext;
-
+    
     // 1️⃣ Resolve tenant
-    string tenantSource;
     string tenant;
+    string tenantSource;
 
     if (!string.IsNullOrEmpty(cliTenant))
     {
@@ -75,15 +72,13 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
     }
     else
     {
-        tenant = httpContext?.Request.Headers["X-Context-Application"].ToString() ?? "Prod";
+        var resolver = sp.GetRequiredService<TenantResolver>();
+        tenant = resolver.Resolve();
         tenantSource = "Header";
     }
 
-    // 2️⃣ Whitelist
-    if (!tenantDatabases.TryGetValue(tenant, out var database))
-    {
-        throw new InvalidOperationException($"Invalid tenant '{tenant}'");
-    }
+    // 2️⃣ Whitelist & Database Name
+    var database = TenantWhitelist.GetDatabaseName(tenant);
 
     // 3️⃣ Build connection string
     var host = Environment.GetEnvironmentVariable("DBHOST");
@@ -94,7 +89,7 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
         throw new InvalidOperationException("Database environment variables not set");
 
     var connectionString =
-        $"Host={host};Database={database};Username={user};Password={pass};Ssl Mode=Require;Trust Server Certificate=true";
+        $"Host={host};Database={database};Username={user};Password={pass};Trust Server Certificate=true";
 
     logger.LogInformation(
         "[DbContext] Source: {Source} | Tenant: {Tenant} | Database: {Database}",
@@ -173,6 +168,10 @@ app.UseRouting();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Register Tenant Middleware
+app.UseMiddleware<TenantDatabaseMiddleware>();
+
 app.MapControllers();
 
 app.Run();
