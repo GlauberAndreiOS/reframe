@@ -6,88 +6,123 @@ using Microsoft.IdentityModel.Tokens;
 using reframe.Data;
 using reframe.Services;
 
+// =====================
+// Load .env (local only)
+// =====================
 var root = Directory.GetCurrentDirectory();
 var dotenv = Path.Combine(root, ".env");
+
 if (File.Exists(dotenv))
 {
     foreach (var line in File.ReadAllLines(dotenv))
     {
-        if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
+        if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+            continue;
 
         var parts = line.Split('=', 2);
-        if (parts.Length != 2) continue;
+        if (parts.Length != 2)
+            continue;
 
-        Environment.SetEnvironmentVariable(parts[0].Trim(), parts[1].Trim());
+        Environment.SetEnvironmentVariable(
+            parts[0].Trim(),
+            parts[1].Trim()
+        );
     }
 }
 
-// CLI env (dotnet run seed Homolog)
-string? cliEnv = null;
-if (args.Length > 0 && args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
+// =====================
+// CLI tenant (dotnet run seed tenant)
+// =====================
+string? cliTenant = null;
+
+if (args.Length > 0 &&
+    args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
 {
-    cliEnv = args.Length > 1 ? args[1] : "Dev";
+    cliTenant = args.Length > 1 ? args[1] : null;
 }
 
+// =====================
+// Required DB env vars
+// =====================
+var dbHost = Environment.GetEnvironmentVariable("DBHOST");
+var dbUser = Environment.GetEnvironmentVariable("DBUSER");
+var dbPass = Environment.GetEnvironmentVariable("DBPASS");
+
+if (string.IsNullOrWhiteSpace(dbHost) ||
+    string.IsNullOrWhiteSpace(dbUser) ||
+    string.IsNullOrWhiteSpace(dbPass))
+{
+    throw new InvalidOperationException(
+        "Defina DBHOST, DBUSER e DBPASS nas variáveis de ambiente."
+    );
+}
+
+// =====================
+// Builder
+// =====================
 var builder = WebApplication.CreateBuilder(args);
 
 // Controllers + JSON
 builder.Services.AddControllers()
     .AddJsonOptions(o =>
     {
-        o.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        o.JsonSerializerOptions.ReferenceHandler =
+            ReferenceHandler.IgnoreCycles;
     });
 
-// 🔹 OpenAPI NATIVO (.NET 10)
+// 🔹 OpenAPI nativo (.NET 10)
 builder.Services.AddOpenApi();
 
 // Infra
 builder.Services.AddHttpContextAccessor();
 
+// =====================
+// DbContext (MULTI-TENANT)
+// =====================
 builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 {
-    string connectionStringName = "DefaultConnection";
-    string contextSource;
+    var httpContext =
+        sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
 
-    if (!string.IsNullOrEmpty(cliEnv))
+    string tenant;
+    string source;
+
+    if (!string.IsNullOrWhiteSpace(cliTenant))
     {
-        connectionStringName = cliEnv.ToLower() switch
-        {
-            "prod" => "ProdConnection",
-            "homolog" => "HomologConnection",
-            "dev" => "DevConnection",
-            _ => "DefaultConnection"
-        };
-        contextSource = $"CLI ({cliEnv})";
+        tenant = cliTenant;
+        source = $"CLI ({tenant})";
     }
     else
     {
-        var httpContext = sp.GetService<IHttpContextAccessor>()?.HttpContext;
-        var envHeader = httpContext?.Request.Headers["X-Context-Application"].ToString();
+        tenant =
+            httpContext?.Request.Headers["X-Context-Application"]
+                .ToString();
 
-        if (!string.IsNullOrEmpty(envHeader))
+        if (string.IsNullOrWhiteSpace(tenant))
         {
-            connectionStringName = envHeader.ToLower() switch
-            {
-                "prod" => "ProdConnection",
-                "homolog" => "HomologConnection",
-                "dev" => "DevConnection",
-                _ => "DefaultConnection"
-            };
-            contextSource = $"Header ({envHeader})";
+            tenant = "default";
+            source = "Header missing (default)";
         }
         else
         {
-            contextSource = "Header Missing (Default)";
+            source = $"Header ({tenant})";
         }
     }
 
+    var databaseName = $"reframeDB_{tenant}";
+
     var connectionString =
-        builder.Configuration.GetConnectionString(connectionStringName)
-        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+        $"Host={dbHost};" +
+        $"Database={databaseName};" +
+        $"Username={dbUser};" +
+        $"Password={dbPass};";
 
     sp.GetService<ILogger<Program>>()?
-        .LogInformation("[DbContext] Source: {Source} | Connection: {Conn}",
-            contextSource, connectionStringName);
+        .LogInformation(
+            "[DbContext] Source: {Source} | Database: {Database}",
+            source,
+            databaseName
+        );
 
     options.UseNpgsql(connectionString);
 });
@@ -95,7 +130,7 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 // Services
 builder.Services.AddScoped<IEmailService, EmailService>();
 
-// Auth
+// Auth (JWT)
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
@@ -103,7 +138,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
+                Encoding.UTF8.GetBytes(
+                    builder.Configuration["Jwt:Key"]!
+                )
             ),
             ValidateIssuer = false,
             ValidateAudience = false
@@ -121,14 +158,23 @@ builder.Services.AddCors(o =>
 
 var app = builder.Build();
 
-// ***** SEED MODE *****
-if (args.Length > 0 && args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
+// =====================
+// SEED MODE
+// =====================
+if (args.Length > 0 &&
+    args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
 {
     using var scope = app.Services.CreateScope();
+
     try
     {
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        Console.WriteLine($"Connecting to database for environment: {cliEnv}...");
+        var context =
+            scope.ServiceProvider
+                 .GetRequiredService<ApplicationDbContext>();
+
+        Console.WriteLine(
+            $"Seeding database: reframeDB_{cliTenant ?? "default"}"
+        );
 
         context.Database.EnsureCreated();
         await DataSeeder.SeedAsync(context);
@@ -141,11 +187,11 @@ if (args.Length > 0 && args[0].Equals("seed", StringComparison.OrdinalIgnoreCase
     return;
 }
 
-// ***** WEB MODE *****
-
+// =====================
+// WEB MODE
+// =====================
 if (app.Environment.IsDevelopment())
 {
-    // 🔹 OpenAPI endpoint nativo
     app.MapOpenApi("/openapi/v1.json");
 }
 
