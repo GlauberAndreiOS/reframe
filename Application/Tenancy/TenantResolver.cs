@@ -20,7 +20,7 @@ public class TenantResolver
         // Default to Prod if header is missing
         var tenant = "Prod";
         
-        if (context.Request.Headers.TryGetValue("X-Content-Application", out var tenantValues))
+        if (context.Request.Headers.TryGetValue("X-Context-Application", out var tenantValues))
         {
             tenant = tenantValues.ToString();
         }
