@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace reframe.Models;
@@ -19,7 +18,7 @@ public class AutomaticThought
     public string AlternativeThoughts { get; set; } = string.Empty;
     public string Reevaluation { get; set; } = string.Empty;
 
-    public int PatientId { get; set; }
+    public Guid PatientId { get; set; }
     [ForeignKey("PatientId")]
     [JsonIgnore]
     public Patient? Patient { get; set; }

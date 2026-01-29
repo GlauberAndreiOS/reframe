@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using reframe.Data;
@@ -25,9 +23,9 @@ public class PatientController : ControllerBase
 
     [HttpPost("link/{psychologistId}")]
     [Authorize(Roles = "Patient")]
-    public async Task<IActionResult> LinkToPsychologist(int psychologistId)
+    public async Task<IActionResult> LinkToPsychologist(Guid psychologistId)
     {
-        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null)
@@ -52,7 +50,7 @@ public class PatientController : ControllerBase
     [Authorize(Roles = "Patient")]
     public async Task<IActionResult> UpdatePsychologistLink([FromBody] UpdatePsychologistDto dto)
     {
-        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null)
@@ -83,12 +81,12 @@ public class PatientController : ControllerBase
         var userIdClaim = User.FindFirst("UserId")?.Value;
         _logger.LogInformation($"DEBUG: GetProfile called. UserId claim: {userIdClaim}");
 
-        var userId = int.Parse(userIdClaim ?? "0");
+        var userId = Guid.Parse(userIdClaim ?? Guid.Empty.ToString());
         
         var patient = await _context.Patients
             .Include(p => p.User)
             .Include(p => p.Psychologist)
-                .ThenInclude(psy => psy.User) // Include User for Psychologist to get Name
+                .ThenInclude(psy => psy!.User) // Include User for Psychologist to get Name
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null)

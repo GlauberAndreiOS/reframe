@@ -1,5 +1,5 @@
 ﻿using reframe.Models;
-using BCrypt.Net;
+using Microsoft.EntityFrameworkCore;
 
 namespace reframe.Data;
 
@@ -7,7 +7,7 @@ public static class DataSeeder
 {
     public static async Task SeedAsync(ApplicationDbContext context)
     {
-        if (context.Users.Any())
+        if (await context.Users.AnyAsync())
         {
             Console.WriteLine("Database already seeded. Skipping...");
             return;
@@ -40,6 +40,7 @@ public static class DataSeeder
 
             var user = new User
             {
+                Id = Guid.NewGuid(),
                 Name = "Dr(a). " + name,
                 Username = username,
                 PasswordHash = passwordHash,
@@ -47,11 +48,11 @@ public static class DataSeeder
             };
 
             context.Users.Add(user);
-            await context.SaveChangesAsync();
-
+            
             var uf = ufs[random.Next(ufs.Length)];
             var psychologist = new Psychologist
             {
+                Id = Guid.NewGuid(),
                 UserId = user.Id,
                 CRP = $"{random.Next(10, 99)}/{random.Next(10000, 99999)} {uf}"
             };
@@ -69,6 +70,7 @@ public static class DataSeeder
 
             var user = new User
             {
+                Id = Guid.NewGuid(),
                 Name = name,
                 Username = username,
                 PasswordHash = passwordHash,
@@ -76,24 +78,24 @@ public static class DataSeeder
             };
 
             context.Users.Add(user);
-            await context.SaveChangesAsync();
 
             var randomPsychologist = psychologists[random.Next(psychologists.Count)];
 
             var patient = new Patient
             {
+                Id = Guid.NewGuid(),
                 UserId = user.Id,
                 PsychologistId = randomPsychologist.Id
             };
 
             context.Patients.Add(patient);
-            await context.SaveChangesAsync();
-
+            
             // 4. Criar 5 Pensamentos Automáticos
             for (int j = 0; j < 5; j++)
             {
                 var thought = new AutomaticThought
                 {
+                    Id = Guid.NewGuid(),
                     PatientId = patient.Id,
                     Date = DateTime.Now.AddDays(-random.Next(1, 60)),
                     Situation = situations[random.Next(situations.Length)],

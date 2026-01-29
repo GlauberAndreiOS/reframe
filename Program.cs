@@ -26,13 +26,27 @@ if (File.Exists(dotenv))
 }
 #endregion
 
-#region CLI ENV (seed)
-string? cliTenant = null;
+#region CLI ENV
+// ==========================================================================================
+// WARNING: TEMPORARY CODE FOR FORCED PRODUCTION DATABASE RESET
+// This code will cause the application to WIPE and RESET the 'Prod' tenant database
+// on startup, and then the application will EXIT.
+// THIS MUST BE REMOVED after the successful deployment to allow the web app to run normally.
+// To revert, restore the original code that reads from the 'args' array.
+// ==========================================================================================
+string? cliCommand = "reset-db";
+string? cliTenant = "Prod"; // Forcing reset on the Production tenant.
 
-if (args.Length > 0 && args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
+/*
+// --- Original code for reference when reverting: ---
+string? cliTenant = null;
+string? cliCommand = args.Length > 0 ? args[0].ToLower() : null;
+
+if (cliCommand is "seed" or "reset-db")
 {
     cliTenant = args.Length > 1 ? args[1] : "Dev";
 }
+*/
 #endregion
 
 var builder = WebApplication.CreateBuilder(args);
@@ -134,26 +148,35 @@ builder.Services.AddCors(o =>
 
 var app = builder.Build();
 
-#region SEED MODE
-if (args.Length > 0 && args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
+#region CLI Commands
+if (cliCommand is "seed" or "reset-db")
 {
     using var scope = app.Services.CreateScope();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
     try
     {
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        if (cliCommand == "reset-db")
+        {
+            logger.LogWarning("--- DELETING DATABASE for tenant {Tenant} ---", cliTenant);
+            await context.Database.EnsureDeletedAsync();
+            logger.LogInformation("Database deleted successfully.");
+        }
 
-        logger.LogInformation("Running migrations for tenant {Tenant}", cliTenant);
-
+        logger.LogInformation("--- Running migrations for tenant {Tenant} ---", cliTenant);
         await context.Database.MigrateAsync();
+        logger.LogInformation("Migrations applied successfully.");
+        
+        logger.LogInformation("--- Seeding database for tenant {Tenant} ---", cliTenant);
+        await DataSeeder.SeedAsync(context);
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Seed error");
+        logger.LogError(ex, "An error occurred during the CLI command '{Command}'.", cliCommand);
     }
 
-    return;
+    return; // Exit after command is done.
 }
 #endregion
 

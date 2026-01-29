@@ -12,5 +12,5 @@ public class UserDto
     public string? CrpNumber { get; set; } // Apenas o número
     public string? CrpUf { get; set; }     // Estado (ex: SP, RJ)
 
-    public int? PsychologistId { get; set; }
+    public Guid? PsychologistId { get; set; }
 }

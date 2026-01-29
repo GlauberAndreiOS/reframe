@@ -2,5 +2,5 @@
 
 public class UpdatePsychologistDto
 {
-    public int? PsychologistId { get; set; }
+    public Guid? PsychologistId { get; set; }
 }

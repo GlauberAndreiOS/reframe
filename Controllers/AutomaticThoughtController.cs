@@ -1,21 +1,16 @@
-﻿using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using reframe.Data;
 using reframe.Models;
-using System;
-using System.Linq;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace reframe.Controllers;
 
 public class AutomaticThoughtSyncDto
 {
     public Guid Id { get; set; }
-    public string Content { get; set; }
-    public string CreatedAt { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
 }
 
 [Route("api/[controller]")]
@@ -35,7 +30,7 @@ public class AutomaticThoughtController : ControllerBase
     [Authorize(Roles = "Patient")]
     public async Task<ActionResult<IEnumerable<AutomaticThought>>> GetMyThoughts()
     {
-        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null) return NotFound("Patient profile not found.");
@@ -49,9 +44,9 @@ public class AutomaticThoughtController : ControllerBase
 
     [HttpGet("patient/{patientId}")]
     [Authorize(Roles = "Psychologist")]
-    public async Task<ActionResult<IEnumerable<AutomaticThought>>> GetPatientThoughts(int patientId)
+    public async Task<ActionResult<IEnumerable<AutomaticThought>>> GetPatientThoughts(Guid patientId)
     {
-        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var psychologist = await _context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (psychologist == null) return NotFound("Psychologist profile not found.");
@@ -73,7 +68,7 @@ public class AutomaticThoughtController : ControllerBase
     [Authorize(Roles = "Patient")]
     public async Task<ActionResult<AutomaticThought>> CreateThought(AutomaticThoughtDto dto)
     {
-        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null) return NotFound("Patient profile not found.");
@@ -108,7 +103,7 @@ public class AutomaticThoughtController : ControllerBase
             return Ok();
         }
 
-        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null) return NotFound("Patient profile not found.");
