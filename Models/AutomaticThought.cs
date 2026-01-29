@@ -22,4 +22,6 @@ public class AutomaticThought
     [ForeignKey("PatientId")]
     [JsonIgnore]
     public Patient? Patient { get; set; }
+    
+    public DateTime? DeletedAt { get; set; }
 }
