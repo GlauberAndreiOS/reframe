@@ -7,6 +7,8 @@ import React, {
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter, useSegments } from 'expo-router';
+import { useInternetStatus } from '@/hooks/use-internal-status';
+import { registerUnauthorizedHandler } from "@/services/api";
 
 interface AuthState {
 	token: string | null;
@@ -42,6 +44,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 
 	const router = useRouter();
 	const segments = useSegments();
+	const isConnected = useInternetStatus();
 	
 	useEffect(() => {
 		// @ts-ignore
@@ -57,7 +60,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 			return;
 		}
 
-		if (inAuthGroup) {
+		if (isConnected && inAuthGroup) {
 			if (auth.userType === 0) {
 				// @ts-ignore
 				router.replace('/(psychologist)');
@@ -67,7 +70,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 			}
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [auth, segments]);
+	}, [auth, segments, isConnected]);
 
 	const signIn = async (token: string, userType: number, email?: string) => {
 		const promises = [
@@ -83,7 +86,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 			promises.push(SecureStore.setItemAsync('app_env', env));
 		}
 
-		await Promise.all(promises);
+		await Promise.all(promises)
 
 		setAuth({
 			token,
@@ -105,6 +108,10 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 
 		router.replace('/(auth)/login');
 	};
+
+	useEffect(() => {
+		registerUnauthorizedHandler(signOut);
+	}, [signOut]);
 
 	return (
 		<AuthContext.Provider

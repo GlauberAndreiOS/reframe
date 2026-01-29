@@ -1,5 +1,3 @@
-
-
 export const Colors = {
 	light: {
 		
@@ -15,6 +13,7 @@ export const Colors = {
 		primary: '#1A237E',   // Azul profundo
 		secondary: '#0277BD', // Azul oceano
 		accent: '#8BC34A',    // Verde reframe
+		danger: '#B91C1C',    // Vermelho perigo
 
 		
 		tint: '#0277BD',
@@ -38,6 +37,7 @@ export const Colors = {
 		primary: '#7986CB',   // Azul profundo suavizado
 		secondary: '#4FC3F7', // Azul oceano claro
 		accent: '#AED581',    // Verde esperança
+		danger: '#F87171',    // Vermelho perigo claro
 
 		
 		tint: '#4FC3F7',

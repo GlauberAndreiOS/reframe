@@ -9,8 +9,6 @@ import {
 	View
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
-import { useHeaderHeight } from '@react-navigation/elements';
-import api from '@/services/api';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
@@ -19,10 +17,10 @@ import { useToast } from '@/context/ToastContext';
 import { AnimatedEntry } from '@/components/ui/animated-entry';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
+import { thoughtsRepository } from '@/database/repositories/thoughts.repository';
 
 export default function NewThoughtScreen() {
 	const router = useRouter();
-	const headerHeight = useHeaderHeight();
 	const { showToast } = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 
@@ -49,23 +47,22 @@ export default function NewThoughtScreen() {
 
 		setLoading(true);
 		try {
-			await api.post('/AutomaticThought', {
+			await thoughtsRepository.create({
 				situation,
 				thought,
 				emotion,
-				behavior,
-				evidencePro,
-				evidenceContra,
-				alternativeThoughts,
-				reevaluation,
+				behavior: behavior || '',
+				evidencePro: evidencePro || '',
+				evidenceContra: evidenceContra || '',
+				alternativeThoughts: alternativeThoughts || '',
+				reevaluation: reevaluation || '',
 			});
-
-			showToast('Pensamento registrado com sucesso!', 'success');
-			setTimeout(() => router.back(), 1500);
+			
+			showToast('Pensamento salvo com sucesso!', 'success');
+			setTimeout(() => router.back(), 500);
 		} catch (error) {
-			console.error('Failed to save thought:', error);
+			console.error('Failed to save thought locally:', error);
 			showToast('Falha ao salvar o pensamento.', 'error');
-		} finally {
 			setLoading(false);
 		}
 	};
@@ -83,97 +80,100 @@ export default function NewThoughtScreen() {
 			/>
 
 			<KeyboardAvoidingView
+				style={styles.container}
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-				style={{ flex: 1 }}
-				keyboardVerticalOffset={headerHeight}
 			>
-				<ScrollView 
+				<ScrollView
+					style={styles.container}
 					contentContainerStyle={styles.scrollContent}
+					keyboardShouldPersistTaps="handled"
 					showsVerticalScrollIndicator={false}
 				>
-					<AnimatedEntry>
-						<View style={styles.section}>
-							<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE ACONTECEU?</ThemedText>
-							<GlassInput
-								placeholder="Situação (Onde? Quando? Com quem?)"
-								value={situation}
-								onChangeText={setSituation}
-								multiline
-								style={styles.textArea}
-							/>
-						</View>
-
-						<View style={styles.section}>
-							<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE PASSOU PELA SUA CABEÇA?</ThemedText>
-							<GlassInput
-								placeholder="Pensamento Automático"
-								value={thought}
-								onChangeText={setThought}
-								multiline
-								style={styles.textArea}
-							/>
-						</View>
-
-						<View style={styles.section}>
-							<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE VOCÊ SENTIU?</ThemedText>
-							<GlassInput
-								placeholder="Emoção (Tristeza, Raiva, Ansiedade...)"
-								value={emotion}
-								onChangeText={setEmotion}
-							/>
-						</View>
-
-						<View style={styles.section}>
-							<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE VOCÊ FEZ?</ThemedText>
-							<GlassInput
-								placeholder="Comportamento / Reação"
-								value={behavior}
-								onChangeText={setBehavior}
-								multiline
-								style={styles.textArea}
-							/>
-						</View>
-
-						<View style={styles.section}>
-							<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>EVIDÊNCIAS</ThemedText>
-							<View style={{ gap: 12 }}>
+					<AnimatedEntry style={{flex: 1}}>
+						<View>
+							<View style={styles.section}>
+								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE ACONTECEU?</ThemedText>
 								<GlassInput
-									placeholder="Evidências a favor do pensamento"
-									value={evidencePro}
-									onChangeText={setEvidencePro}
-									multiline
-									style={styles.textArea}
-								/>
-								<GlassInput
-									placeholder="Evidências contra o pensamento"
-									value={evidenceContra}
-									onChangeText={setEvidenceContra}
+									placeholder="Situação (Onde? Quando? Com quem?)"
+									value={situation}
+									onChangeText={setSituation}
 									multiline
 									style={styles.textArea}
 								/>
 							</View>
-						</View>
 
-						<View style={styles.section}>
-							<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>REESTRUTURAÇÃO</ThemedText>
-							<View style={{ gap: 12 }}>
+							<View style={styles.section}>
+								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE PASSOU PELA SUA CABEÇA?</ThemedText>
 								<GlassInput
-									placeholder="Pensamentos Alternativos"
-									value={alternativeThoughts}
-									onChangeText={setAlternativeThoughts}
-									multiline
-									style={styles.textArea}
-								/>
-								<GlassInput
-									placeholder="Reavaliação da Emoção"
-									value={reevaluation}
-									onChangeText={setReevaluation}
+									placeholder="Pensamento Automático"
+									value={thought}
+									onChangeText={setThought}
 									multiline
 									style={styles.textArea}
 								/>
 							</View>
-						</View>
 
+							<View style={styles.section}>
+								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE VOCÊ SENTIU?</ThemedText>
+								<GlassInput
+									placeholder="Emoção (Tristeza, Raiva, Ansiedade...)"
+									value={emotion}
+									onChangeText={setEmotion}
+								/>
+							</View>
+
+							<View style={styles.section}>
+								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE VOCÊ FEZ?</ThemedText>
+								<GlassInput
+									placeholder="Comportamento / Reação"
+									value={behavior}
+									onChangeText={setBehavior}
+									multiline
+									style={styles.textArea}
+								/>
+							</View>
+
+							<View style={styles.section}>
+								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>EVIDÊNCIAS</ThemedText>
+								<View style={{ gap: 12 }}>
+									<GlassInput
+										placeholder="Evidências a favor do pensamento"
+										value={evidencePro}
+										onChangeText={setEvidencePro}
+										multiline
+										style={styles.textArea}
+									/>
+									<GlassInput
+										placeholder="Evidências contra o pensamento"
+										value={evidenceContra}
+										onChangeText={setEvidenceContra}
+										multiline
+										style={styles.textArea}
+									/>
+								</View>
+							</View>
+
+							<View style={styles.section}>
+								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>REESTRUTURAÇÃO</ThemedText>
+								<View style={{ gap: 12 }}>
+									<GlassInput
+										placeholder="Pensamentos Alternativos"
+										value={alternativeThoughts}
+										onChangeText={setAlternativeThoughts}
+										multiline
+										style={styles.textArea}
+									/>
+									<GlassInput
+										placeholder="Reavaliação da Emoção"
+										value={reevaluation}
+										onChangeText={setReevaluation}
+										multiline
+										style={styles.textArea}
+									/>
+								</View>
+							</View>
+						</View>
+						
 						<TouchableOpacity
 							style={[
 								styles.button,
@@ -203,8 +203,10 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	scrollContent: {
-		paddingInline: 24,
-		paddingBottom: 60,
+		flexGrow: 1,
+		justifyContent: 'space-between',
+		paddingHorizontal: 24,
+		paddingBottom: 50
 	},
 	section: {
 		marginBottom: 24,
@@ -224,7 +226,7 @@ const styles = StyleSheet.create({
 		padding: 16,
 		borderRadius: 16,
 		alignItems: 'center',
-		marginTop: 10,
+		marginTop: 20,
 		shadowColor: "#000",
 		shadowOffset: {
 			width: 0,

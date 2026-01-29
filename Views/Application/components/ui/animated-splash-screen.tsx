@@ -40,7 +40,7 @@ export function AnimatedSplashScreen() {
 			return () => clearTimeout(timeout);
 		};
 
-		animateAndNavigate();
+		void animateAndNavigate();
 	}, [token, userType, opacity, scale, router]);
 
 	const animatedStyle = useAnimatedStyle(() => ({

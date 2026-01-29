@@ -1,49 +1,45 @@
 import { useEffect, useState } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
-import { loadAuth } from '@/bootstrap/loadAuth';
-import { loadFonts } from '@/bootstrap/loadFonts';
+import * as SecureStore from 'expo-secure-store';
+import { ensureDbReady } from '@/database/bootstrap';
 
-type BootstrapResult = {
-	auth: {
-		token: string | null;
-		userType: number | null;
-	};
-};
+SplashScreen.preventAutoHideAsync();
 
 export function useBootstrap() {
-	const [ready, setReady] = useState(false);
-	const [data, setData] = useState<BootstrapResult | null>(null);
+    const [ready, setReady] = useState(false);
+    const [data, setData] = useState<{ auth: { token: string | null, userType: number | null } }>({ auth: { token: null, userType: null } });
 
-	useEffect(() => {
-		let mounted = true;
+    useEffect(() => {
+        async function prepare() {
+            try {
+                const dbPromise = ensureDbReady();
 
-		const bootstrap = async () => {
-			try {
+                const tokenPromise = SecureStore.getItemAsync('token');
+                const userTypePromise = SecureStore.getItemAsync('userType');
 
-				await SplashScreen.preventAutoHideAsync();
+                const [token, userType] = await Promise.all([
+                    tokenPromise,
+                    userTypePromise,
+                    dbPromise,
+                ]);
 
-				const [auth] = await Promise.all([
-					loadAuth(),
-					loadFonts(),
-				]);
+                setData({
+                    auth: {
+                        token,
+                        userType: userType ? parseInt(userType, 10) : null,
+                    },
+                });
 
-				if (!mounted) return;
+            } catch (e) {
+                console.warn(e);
+            } finally {
+                setReady(true);
+                await SplashScreen.hideAsync();
+            }
+        }
 
-				setData({ auth });
-				setReady(true);
-			} catch (err) {
-				console.error('Bootstrap failed', err);
+        void prepare();
+    }, []);
 
-				setReady(true);
-			}
-		};
-
-		bootstrap();
-
-		return () => {
-			mounted = false;
-		};
-	}, []);
-
-	return { ready, data };
+    return { ready, data };
 }
