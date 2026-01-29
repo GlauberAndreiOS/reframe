@@ -4,8 +4,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using reframe.Data;
 using reframe.Models;
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace reframe.Controllers;
+
+public class AutomaticThoughtSyncDto
+{
+    public Guid Id { get; set; }
+    public string Content { get; set; }
+    public string CreatedAt { get; set; }
+}
 
 [Route("api/[controller]")]
 [ApiController]
@@ -69,7 +80,8 @@ public class AutomaticThoughtController : ControllerBase
 
         var thought = new AutomaticThought
         {
-            Date = DateTime.Now,
+            Id = Guid.NewGuid(),
+            Date = DateTime.UtcNow,
             Situation = dto.Situation,
             Thought = dto.Thought,
             Emotion = dto.Emotion,
@@ -85,5 +97,52 @@ public class AutomaticThoughtController : ControllerBase
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(nameof(GetMyThoughts), new { id = thought.Id }, thought);
+    }
+    
+    [HttpPost("sync")]
+    [Authorize(Roles = "Patient")]
+    public async Task<IActionResult> SyncThoughts([FromBody] List<AutomaticThoughtSyncDto> thoughtsDto)
+    {
+        if (thoughtsDto == null || !thoughtsDto.Any())
+        {
+            return Ok();
+        }
+
+        var userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (patient == null) return NotFound("Patient profile not found.");
+
+        var receivedIds = thoughtsDto.Select(dto => dto.Id).ToList();
+        
+        var existingIds = await _context.AutomaticThoughts
+            .Where(at => receivedIds.Contains(at.Id))
+            .Select(at => at.Id)
+            .ToListAsync();
+
+        var newThoughtsDto = thoughtsDto.Where(dto => !existingIds.Contains(dto.Id));
+
+        var thoughtsToCreate = newThoughtsDto.Select(dto => new AutomaticThought
+        {
+            Id = dto.Id,
+            Date = DateTime.Parse(dto.CreatedAt).ToUniversalTime(),
+            Thought = dto.Content,
+            PatientId = patient.Id,
+            Situation = "Entrada offline",
+            Emotion = "Não especificada",
+            Behavior = "",
+            EvidencePro = "",
+            EvidenceContra = "",
+            AlternativeThoughts = "",
+            Reevaluation = ""
+        });
+
+        if (thoughtsToCreate.Any())
+        {
+            await _context.AutomaticThoughts.AddRangeAsync(thoughtsToCreate);
+            await _context.SaveChangesAsync();
+        }
+
+        return Ok(new { SyncedCount = thoughtsToCreate.Count() });
     }
 }

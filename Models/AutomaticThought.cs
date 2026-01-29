@@ -6,8 +6,7 @@ namespace reframe.Models;
 
 public class AutomaticThought
 {
-    [Key]
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     
     public DateTime Date { get; set; } = DateTime.Now;
     
