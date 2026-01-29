@@ -27,18 +27,6 @@ if (File.Exists(dotenv))
 #endregion
 
 #region CLI ENV
-// ==========================================================================================
-// WARNING: TEMPORARY CODE FOR FORCED PRODUCTION DATABASE RESET
-// This code will cause the application to WIPE and RESET the 'Prod' tenant database
-// on startup, and then the application will EXIT.
-// THIS MUST BE REMOVED after the successful deployment to allow the web app to run normally.
-// To revert, restore the original code that reads from the 'args' array.
-// ==========================================================================================
-string? cliCommand = "reset-db";
-string? cliTenant = "Prod"; // Forcing reset on the Production tenant.
-
-/*
-// --- Original code for reference when reverting: ---
 string? cliTenant = null;
 string? cliCommand = args.Length > 0 ? args[0].ToLower() : null;
 
@@ -46,7 +34,6 @@ if (cliCommand is "seed" or "reset-db")
 {
     cliTenant = args.Length > 1 ? args[1] : "Dev";
 }
-*/
 #endregion
 
 var builder = WebApplication.CreateBuilder(args);

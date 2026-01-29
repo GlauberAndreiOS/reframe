@@ -1,4 +1,9 @@
 ﻿using reframe.Models;
+using BCrypt.Net;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 
 namespace reframe.Data;
@@ -97,7 +102,7 @@ public static class DataSeeder
                 {
                     Id = Guid.NewGuid(),
                     PatientId = patient.Id,
-                    Date = DateTime.Now.AddDays(-random.Next(1, 60)),
+                    Date = DateTime.UtcNow.AddDays(-random.Next(1, 60)), // Corrected to UtcNow
                     Situation = situations[random.Next(situations.Length)],
                     Thought = thoughts[random.Next(thoughts.Length)],
                     Emotion = emotions[random.Next(emotions.Length)],
