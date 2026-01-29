@@ -12,8 +12,8 @@ using reframe.Data;
 namespace reframe.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260129152431_AddAutomaticThoughtEntity")]
-    partial class AddAutomaticThoughtEntity
+    [Migration("20260129154444_TempIdToAutomaticThoughts")]
+    partial class TempIdToAutomaticThoughts
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

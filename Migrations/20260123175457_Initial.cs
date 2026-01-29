@@ -80,8 +80,7 @@ namespace reframe.Migrations
                 name: "AutomaticThoughts",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     Date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     Situation = table.Column<string>(type: "text", nullable: false),
                     Thought = table.Column<string>(type: "text", nullable: false),

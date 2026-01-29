@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace reframe.Models;
 
@@ -11,7 +12,7 @@ public enum UserType
 public class User
 {
     [Key]
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Username { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public UserType UserType { get; set; }
