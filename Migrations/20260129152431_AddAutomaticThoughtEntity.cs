@@ -17,6 +17,7 @@ namespace reframe.Migrations
                 table: "AutomaticThoughts",
                 type: "uuid",
                 nullable: false,
+                defaultValueSql: "gen_random_uuid()",
                 oldClrType: typeof(int),
                 oldType: "integer")
                 .OldAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
