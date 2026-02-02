@@ -38,7 +38,7 @@ export default function ThoughtsScreen() {
 	useFocusEffect(
 		useCallback(() => {
 			void syncWithBackend();
-		}, [])
+		}, [syncWithBackend])
 	);
 
 	const handleDelete = (id: string) => {

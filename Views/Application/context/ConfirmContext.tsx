@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 
 interface ConfirmOptions {
@@ -18,51 +18,51 @@ interface ConfirmContextType {
 const ConfirmContext = createContext<ConfirmContextType | undefined>(undefined);
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
-  const [modalConfig, setModalConfig] = useState<ConfirmOptions | null>(null);
-  const [visible, setVisible] = useState(false);
+	const [modalConfig, setModalConfig] = useState<ConfirmOptions | null>(null);
+	const [visible, setVisible] = useState(false);
 
-  const confirm = useCallback((options: ConfirmOptions) => {
-    setModalConfig(options);
-    setVisible(true);
-  }, []);
+	const confirm = useCallback((options: ConfirmOptions) => {
+		setModalConfig(options);
+		setVisible(true);
+	}, []);
 
-  const handleConfirm = useCallback(() => {
-    if (modalConfig?.onConfirm) {
-      modalConfig.onConfirm();
-    }
-    setVisible(false);
-  }, [modalConfig]);
+	const handleConfirm = useCallback(() => {
+		if (modalConfig?.onConfirm) {
+			modalConfig.onConfirm();
+		}
+		setVisible(false);
+	}, [modalConfig]);
 
-  const handleCancel = useCallback(() => {
-    if (modalConfig?.onCancel) {
-      modalConfig.onCancel();
-    }
-    setVisible(false);
-  }, [modalConfig]);
+	const handleCancel = useCallback(() => {
+		if (modalConfig?.onCancel) {
+			modalConfig.onCancel();
+		}
+		setVisible(false);
+	}, [modalConfig]);
 
-  return (
-    <ConfirmContext.Provider value={{ confirm }}>
-      {children}
-      {modalConfig && (
-        <ConfirmModal
-          visible={visible}
-          title={modalConfig.title}
-          message={modalConfig.message}
-          confirmText={modalConfig.confirmText}
-          cancelText={modalConfig.cancelText}
-          isDestructive={modalConfig.isDestructive}
-          onConfirm={handleConfirm}
-          onCancel={handleCancel}
-        />
-      )}
-    </ConfirmContext.Provider>
-  );
+	return (
+		<ConfirmContext.Provider value={{ confirm }}>
+			{children}
+			{modalConfig && (
+				<ConfirmModal
+					visible={visible}
+					title={modalConfig.title}
+					message={modalConfig.message}
+					confirmText={modalConfig.confirmText}
+					cancelText={modalConfig.cancelText}
+					isDestructive={modalConfig.isDestructive}
+					onConfirm={handleConfirm}
+					onCancel={handleCancel}
+				/>
+			)}
+		</ConfirmContext.Provider>
+	);
 }
 
 export function useConfirm() {
-  const context = useContext(ConfirmContext);
-  if (!context) {
-    throw new Error('useConfirm must be used within a ConfirmProvider');
-  }
-  return context;
+	const context = useContext(ConfirmContext);
+	if (!context) {
+		throw new Error('useConfirm must be used within a ConfirmProvider');
+	}
+	return context;
 }

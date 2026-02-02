@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
 	TouchableOpacity,
 	StyleSheet,
@@ -18,6 +18,7 @@ import { AnimatedEntry } from '@/components/ui/animated-entry';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { thoughtsRepository } from '@/database/repositories/thoughts.repository';
+import { VoiceInputButton } from '@/components/ui/voice-input-button';
 
 export default function NewThoughtScreen() {
 	const router = useRouter();
@@ -38,6 +39,32 @@ export default function NewThoughtScreen() {
 	const [evidenceContra, setEvidenceContra] = useState('');
 	const [alternativeThoughts, setAlternativeThoughts] = useState('');
 	const [reevaluation, setReevaluation] = useState('');
+
+	const [activeListeningField, setActiveListeningField] = useState<string | null>(null);
+	
+	const baseTextRef = useRef<string>('');
+
+	const handleVoiceResult = (setText: (t: string) => void, newText: string) => {
+		const separator = baseTextRef.current && baseTextRef.current.length > 0 ? ' ' : '';
+		const updatedText = `${baseTextRef.current}${separator}${newText}`;
+		setText(updatedText);
+	};
+
+	const renderVoiceButton = (fieldId: string, currentText: string, setText: (t: string) => void) => (
+		<VoiceInputButton
+			onTextRecognized={(text) => handleVoiceResult(setText, text)}
+			isListening={activeListeningField === fieldId}
+			onListeningStateChanged={(isListening) => {
+				if (isListening) {
+					baseTextRef.current = currentText;
+					setActiveListeningField(fieldId);
+					showToast('Ouvindo...', 'info');
+				} else if (activeListeningField === fieldId) {
+					setActiveListeningField(null);
+				}
+			}}
+		/>
+	);
 
 	const handleSave = async () => {
 		if (!situation || !thought || !emotion) {
@@ -98,7 +125,7 @@ export default function NewThoughtScreen() {
 									value={situation}
 									onChangeText={setSituation}
 									multiline
-									style={styles.textArea}
+									rightAdornment={renderVoiceButton('situation', situation, setSituation)}
 								/>
 							</View>
 
@@ -109,7 +136,7 @@ export default function NewThoughtScreen() {
 									value={thought}
 									onChangeText={setThought}
 									multiline
-									style={styles.textArea}
+									rightAdornment={renderVoiceButton('thought', thought, setThought)}
 								/>
 							</View>
 
@@ -119,6 +146,7 @@ export default function NewThoughtScreen() {
 									placeholder="Emoção (Tristeza, Raiva, Ansiedade...)"
 									value={emotion}
 									onChangeText={setEmotion}
+									rightAdornment={renderVoiceButton('emotion', emotion, setEmotion)}
 								/>
 							</View>
 
@@ -129,7 +157,7 @@ export default function NewThoughtScreen() {
 									value={behavior}
 									onChangeText={setBehavior}
 									multiline
-									style={styles.textArea}
+									rightAdornment={renderVoiceButton('behavior', behavior, setBehavior)}
 								/>
 							</View>
 
@@ -141,14 +169,14 @@ export default function NewThoughtScreen() {
 										value={evidencePro}
 										onChangeText={setEvidencePro}
 										multiline
-										style={styles.textArea}
+										rightAdornment={renderVoiceButton('evidencePro', evidencePro, setEvidencePro)}
 									/>
 									<GlassInput
 										placeholder="Evidências contra o pensamento"
 										value={evidenceContra}
 										onChangeText={setEvidenceContra}
 										multiline
-										style={styles.textArea}
+										rightAdornment={renderVoiceButton('evidenceContra', evidenceContra, setEvidenceContra)}
 									/>
 								</View>
 							</View>
@@ -161,14 +189,14 @@ export default function NewThoughtScreen() {
 										value={alternativeThoughts}
 										onChangeText={setAlternativeThoughts}
 										multiline
-										style={styles.textArea}
+										rightAdornment={renderVoiceButton('alternativeThoughts', alternativeThoughts, setAlternativeThoughts)}
 									/>
 									<GlassInput
 										placeholder="Reavaliação da Emoção"
 										value={reevaluation}
 										onChangeText={setReevaluation}
 										multiline
-										style={styles.textArea}
+										rightAdornment={renderVoiceButton('reevaluation', reevaluation, setReevaluation)}
 									/>
 								</View>
 							</View>
@@ -206,7 +234,7 @@ const styles = StyleSheet.create({
 		flexGrow: 1,
 		justifyContent: 'space-between',
 		paddingHorizontal: 24,
-		paddingBottom: 50
+		paddingBottom: 80
 	},
 	section: {
 		marginBottom: 24,
@@ -217,10 +245,6 @@ const styles = StyleSheet.create({
 		marginBottom: 8,
 		letterSpacing: 1,
 		textTransform: 'uppercase',
-	},
-	textArea: {
-		minHeight: 80,
-		textAlignVertical: 'top',
 	},
 	button: {
 		padding: 16,

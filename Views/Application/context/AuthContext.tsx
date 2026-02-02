@@ -3,7 +3,7 @@ import React, {
 	useContext,
 	useEffect,
 	useState,
-	ReactNode,
+	ReactNode, useCallback,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter, useSegments } from 'expo-router';
@@ -93,13 +93,13 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 			userType,
 		});
 	};
-
-	const signOut = async () => {
+	
+	const signOut = useCallback(async () => {
 		await Promise.all([
 			SecureStore.deleteItemAsync('token'),
 			SecureStore.deleteItemAsync('userType'),
 			SecureStore.deleteItemAsync('app_env'),
-		]);
+		])
 
 		setAuth({
 			token: null,
@@ -107,7 +107,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 		});
 
 		router.replace('/(auth)/login');
-	};
+	}, [router])
 
 	useEffect(() => {
 		registerUnauthorizedHandler(signOut);

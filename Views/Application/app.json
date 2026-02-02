@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/images/logo(Dark).png",
     "scheme": "application",
-    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "backgroundColor": "#151718",
     "ios": {
@@ -25,7 +24,13 @@
         "foregroundImage": "./assets/images/logo(Dark).png",
         "backgroundColor": "#151718"
       },
-      "package": "com.gandreidev.reframe"
+      "package": "com.gandreidev.reframe",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -47,6 +52,16 @@
         "expo-background-fetch",
         {
           "fetchInterval": 15
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permitir acesso ao microfone para ditar seus pensamentos.",
+          "speechRecognitionPermission": "Permitir reconhecimento de fala para transcrever sua voz em texto.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
     ],

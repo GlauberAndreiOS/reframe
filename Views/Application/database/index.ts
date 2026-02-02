@@ -1,13 +1,13 @@
-﻿import { connectDatabase } from './connection';
+import { connectDatabase } from './connection';
 import { runMigrations } from './migrator';
 
 let initialized = false;
 
 export const initDatabase = async () => {
-    if (initialized) return;
+	if (initialized) return;
 
-    await connectDatabase();
-    await runMigrations();
+	await connectDatabase();
+	await runMigrations();
 
-    initialized = true;
+	initialized = true;
 };
