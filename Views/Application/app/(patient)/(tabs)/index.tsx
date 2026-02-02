@@ -14,7 +14,7 @@ import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { useThoughts } from './thoughts.hooks';
+import { useThoughts } from '@/hooks/(patient)/thoughts.hooks';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 
@@ -157,11 +157,14 @@ export default function ThoughtsScreen() {
 										{item.synced === -1 && (
 											<IconSymbol name="exclamationmark.triangle.fill" size={16} color={dangerColor} style={{ marginRight: 8 }} />
 										)}
-										<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
-											<ThemedText style={[styles.emotion, { color: tintColor }]}>
-												{item.emotion}
-											</ThemedText>
-										</View>
+									</View>
+								</View>
+
+								<View style={{ marginBottom: 16, flexDirection: 'row' }}>
+									<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
+										<ThemedText style={[styles.emotion, { color: tintColor }]}>
+											{item.emotion}
+										</ThemedText>
 									</View>
 								</View>
 
@@ -273,7 +276,7 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		alignItems: 'center',
-		marginBottom: 16,
+		marginBottom: 12, // Reduzi um pouco o margin bottom aqui
 		gap: 8,
 	},
 	date: {

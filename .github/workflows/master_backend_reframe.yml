@@ -1,0 +1,15 @@
+name: Trigger Render Deploy Backend
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'Views/Application/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook
+        run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"

@@ -7,13 +7,14 @@
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "sync-version": "node scripts/sync-version.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/native": "^7.1.8",
     "axios": "^1.13.2",
-    "expo": "~54.0.32",
+    "expo": "~54.0.33",
     "expo-background-fetch": "~14.0.9",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.8",
@@ -22,7 +23,7 @@
     "expo-linking": "~8.0.11",
     "expo-navigation-bar": "~5.0.10",
     "expo-network": "~8.0.8",
-    "expo-router": "~6.0.22",
+    "expo-router": "~6.0.23",
     "expo-secure-store": "^15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-sqlite": "~16.0.10",
@@ -39,9 +40,12 @@
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "semantic-release": "^25.0.3",
     "typescript": "~5.9.2"
   },
   "private": true
