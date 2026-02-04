@@ -1,24 +1,24 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
-	View,
-	Text,
-	TouchableOpacity,
-	StyleSheet,
+	ActivityIndicator,
 	FlatList,
 	KeyboardAvoidingView,
 	Platform,
-	ActivityIndicator
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
+import {useRouter} from 'expo-router';
 import api from '@/services/api';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useToast } from '@/context/ToastContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AmbientBackground } from '@/components/ui/ambient-background';
-import { GlassInput, HelperTextType } from '@/components/ui/glass-input';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
+import {ThemedView} from '@/components/themed-view';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useToast} from '@/context/ToastContext';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {AmbientBackground} from '@/components/ui/ambient-background';
+import {GlassInput, HelperTextType} from '@/components/ui/glass-input';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {Avatar} from '@/components/ui/avatar';
 
 type UserType = 'patient' | 'psychologist' | null;
 
@@ -27,29 +27,30 @@ interface Psychologist {
     name: string;
     crp: string;
     email: string;
+    profilePictureUrl?: string;
 }
 
 export default function Register() {
 	const router = useRouter();
-	const { showToast } = useToast();
+	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
-	const [step, setStep] = useState(0); 
-  
+	const [step, setStep] = useState(0);
+
 	const [username, setUsername] = useState('');
 	const [name, setName] = useState('');
 	const [password, setPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
 	const [userType, setUserType] = useState<UserType>(null);
-  
+
 	const [isCheckingUsername, setIsCheckingUsername] = useState(false);
 	const [usernameHelper, setUsernameHelper] = useState<{ text: string, type: HelperTextType } | null>(null);
 	const [passwordHelper, setPasswordHelper] = useState<{ text: string, type: HelperTextType } | null>(null);
 
 	const [crp, setCrp] = useState('');
 	const [uf, setUf] = useState('');
-  
+
 	const [searchQuery, setSearchQuery] = useState('');
 	const [selectedPsychologistId, setSelectedPsychologistId] = useState<number | null>(null);
 	const [psychologists, setPsychologists] = useState<Psychologist[]>([]);
@@ -72,7 +73,7 @@ export default function Register() {
 		}
 
 		if (!validateEmail(username)) {
-			setUsernameHelper({ text: 'Insira um e-mail válido.', type: 'error' });
+			setUsernameHelper({text: 'Insira um e-mail válido.', type: 'error'});
 			return;
 		}
 
@@ -82,10 +83,10 @@ export default function Register() {
 		try {
 			const response = await api.get(`/Auth/check-username/${username}`);
 			if (response.data.exists) {
-				setUsernameHelper({ text: 'E-mail já cadastrado.', type: 'error' });
+				setUsernameHelper({text: 'E-mail já cadastrado.', type: 'error'});
 				showToast('Este e-mail já está em uso.', 'error');
 			} else {
-				setUsernameHelper({ text: 'E-mail disponível!', type: 'success' });
+				setUsernameHelper({text: 'E-mail disponível!', type: 'success'});
 			}
 		} catch (error) {
 			console.error('Failed to check username:', error);
@@ -96,7 +97,7 @@ export default function Register() {
 
 	useEffect(() => {
 		if (confirmPassword && password !== confirmPassword) {
-			setPasswordHelper({ text: 'As senhas não coincidem.', type: 'error' });
+			setPasswordHelper({text: 'As senhas não coincidem.', type: 'error'});
 		} else {
 			setPasswordHelper(null);
 		}
@@ -152,26 +153,26 @@ export default function Register() {
 				return;
 			}
 		}
-    
+
 		const payload = {
 			username,
 			password,
 			name,
-			userType: userType === 'patient' ? 1 : 0, 
-			...(userType === 'psychologist' 
-				? { 
-					crpNumber: crp.split('/')[0], 
-					crpUf: uf 
-				} 
-				: { 
-					psychologistId: selectedPsychologistId 
+			userType: userType === 'patient' ? 1 : 0,
+			...(userType === 'psychologist'
+				? {
+					crpNumber: crp.split('/')[0],
+					crpUf: uf
+				}
+				: {
+					psychologistId: selectedPsychologistId
 				}
 			)
 		};
 
 		try {
 			await api.post('/Auth/register', payload);
-      
+
 			showToast('Cadastro realizado com sucesso!', 'success');
 			setTimeout(() => router.replace('/(auth)/login'), 1500);
 		} catch (error: any) {
@@ -199,8 +200,8 @@ export default function Register() {
 
 		return (
 			<View style={styles.formSection}>
-				<Text style={[styles.stepTitle, { color: textColor }]}>Vamos criar uma conta!</Text>
-        
+				<Text style={[styles.stepTitle, {color: textColor}]}>Vamos criar uma conta!</Text>
+
 				<View style={styles.inputGroup}>
 					<GlassInput
 						placeholder="Nome Completo"
@@ -222,7 +223,7 @@ export default function Register() {
 						autoCapitalize="none"
 						rightAdornment={
 							isCheckingUsername ? (
-								<ActivityIndicator size="small" color={tintColor} />
+								<ActivityIndicator size="small" color={tintColor}/>
 							) : null
 						}
 					/>
@@ -242,9 +243,9 @@ export default function Register() {
 					/>
 				</View>
 
-				<TouchableOpacity 
-					style={[styles.primaryButton, { backgroundColor: tintColor }, isNextDisabled && styles.buttonDisabled]} 
-					onPress={handleNext} 
+				<TouchableOpacity
+					style={[styles.primaryButton, {backgroundColor: tintColor}, isNextDisabled && styles.buttonDisabled]}
+					onPress={handleNext}
 					disabled={isNextDisabled}
 				>
 					<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
@@ -255,40 +256,40 @@ export default function Register() {
 
 	const renderTypeStep = () => (
 		<View style={styles.formSection}>
-			<Text style={[styles.stepTitle, { color: textColor }]}>Você é?</Text>
+			<Text style={[styles.stepTitle, {color: textColor}]}>Você é?</Text>
 			<View style={styles.typeSelectionContainer}>
 				<TouchableOpacity
 					style={[
-						styles.typeButton, 
-						{ borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' },
-						userType === 'patient' && { backgroundColor: tintColor }
+						styles.typeButton,
+						{borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'},
+						userType === 'patient' && {backgroundColor: tintColor}
 					]}
 					onPress={() => setUserType('patient')}
 				>
 					<Text style={[
-						styles.typeButtonText, 
-						{ color: tintColor },
+						styles.typeButtonText,
+						{color: tintColor},
 						userType === 'patient' && styles.typeButtonTextSelected
 					]}>Paciente</Text>
 				</TouchableOpacity>
-        
+
 				<TouchableOpacity
 					style={[
-						styles.typeButton, 
-						{ borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' },
-						userType === 'psychologist' && { backgroundColor: tintColor }
+						styles.typeButton,
+						{borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'},
+						userType === 'psychologist' && {backgroundColor: tintColor}
 					]}
 					onPress={() => setUserType('psychologist')}
 				>
 					<Text style={[
-						styles.typeButtonText, 
-						{ color: tintColor },
+						styles.typeButtonText,
+						{color: tintColor},
 						userType === 'psychologist' && styles.typeButtonTextSelected
 					]}>Psicólogo</Text>
 				</TouchableOpacity>
 			</View>
-			<TouchableOpacity 
-				style={[styles.primaryButton, { backgroundColor: tintColor }, !userType && styles.buttonDisabled]} 
+			<TouchableOpacity
+				style={[styles.primaryButton, {backgroundColor: tintColor}, !userType && styles.buttonDisabled]}
 				onPress={handleNext}
 				disabled={!userType}
 			>
@@ -301,7 +302,7 @@ export default function Register() {
 		const isFinishDisabled = !crp || !uf;
 		return (
 			<View style={styles.formSection}>
-				<Text style={[styles.stepTitle, { color: textColor }]}>Dados Profissionais</Text>
+				<Text style={[styles.stepTitle, {color: textColor}]}>Dados Profissionais</Text>
 				<View style={styles.inputGroup}>
 					<GlassInput
 						placeholder="CRP (ex: 06/12345)"
@@ -318,8 +319,8 @@ export default function Register() {
 						autoCapitalize="characters"
 					/>
 				</View>
-				<TouchableOpacity 
-					style={[styles.primaryButton, { backgroundColor: tintColor }, isFinishDisabled && styles.buttonDisabled]} 
+				<TouchableOpacity
+					style={[styles.primaryButton, {backgroundColor: tintColor}, isFinishDisabled && styles.buttonDisabled]}
 					onPress={handleRegister}
 					disabled={isFinishDisabled}
 				>
@@ -330,47 +331,52 @@ export default function Register() {
 	};
 
 	const renderPatientDetails = () => {
-		const filteredPsychologists = psychologists.filter(p => 
-			p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      p.crp.includes(searchQuery)
+		const filteredPsychologists = psychologists.filter(p =>
+			p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.crp.includes(searchQuery)
 		);
 
 		return (
-			<View style={[styles.formSection, { flex: 1 }]}>
-				<Text style={[styles.stepTitle, { color: textColor }]}>Vincular Psicólogo</Text>
+			<View style={[styles.formSection, {flex: 1}]}>
+				<Text style={[styles.stepTitle, {color: textColor}]}>Vincular Psicólogo</Text>
 				<GlassInput
 					placeholder="Buscar por nome ou CRP"
 					value={searchQuery}
 					onChangeText={setSearchQuery}
 				/>
-        
+
 				{isLoadingPsychologists ? (
-					<ActivityIndicator size="large" color={tintColor} style={{ marginTop: 20 }} />
+					<ActivityIndicator size="large" color={tintColor} style={{marginTop: 20}}/>
 				) : (
 					<FlatList
 						data={filteredPsychologists}
 						keyExtractor={(item) => item.id.toString()}
 						style={styles.list}
-						contentContainerStyle={{ gap: 10 }}
-						renderItem={({ item }) => (
-							<View style={[styles.psychologistItem, { borderColor: borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' }]}>
-								<Image source={{ uri: `https://ui-avatars.com/api/?name=${item.name}&background=random` }} style={styles.avatar} />
-								<View style={styles.psychologistInfo}>
-									<Text style={[styles.psychologistName, { color: textColor }]}>{item.name}</Text>
-									<Text style={[styles.psychologistCrp, { color: mutedColor }]}>CRP: {item.crp}</Text>
+						contentContainerStyle={{gap: 10}}
+						renderItem={({item}) => (
+							<View style={[styles.psychologistItem, {
+								borderColor: borderColor,
+								backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'
+							}]}>
+								<View style={{marginRight: 12}}>
+									<Avatar uri={item.profilePictureUrl} size={40} name={item.name} />
 								</View>
-								<TouchableOpacity 
+								<View style={styles.psychologistInfo}>
+									<Text style={[styles.psychologistName, {color: textColor}]}>{item.name}</Text>
+									<Text style={[styles.psychologistCrp, {color: mutedColor}]}>CRP: {item.crp}</Text>
+								</View>
+								<TouchableOpacity
 									style={[
-										styles.linkButton, 
-										{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#eee' },
-										selectedPsychologistId === item.id && { backgroundColor: '#34C759' }
+										styles.linkButton,
+										{backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#eee'},
+										selectedPsychologistId === item.id && {backgroundColor: '#34C759'}
 									]}
 									onPress={() => setSelectedPsychologistId(item.id)}
 								>
 									<Text style={[
-										styles.linkButtonText, 
-										{ color: textColor },
-										selectedPsychologistId === item.id && { color: '#fff' }
+										styles.linkButtonText,
+										{color: textColor},
+										selectedPsychologistId === item.id && {color: '#fff'}
 									]}>
 										{selectedPsychologistId === item.id ? 'Vinculado' : 'Vincular'}
 									</Text>
@@ -380,7 +386,7 @@ export default function Register() {
 					/>
 				)}
 
-				<TouchableOpacity style={[styles.primaryButton, { backgroundColor: tintColor }]} onPress={handleRegister}>
+				<TouchableOpacity style={[styles.primaryButton, {backgroundColor: tintColor}]} onPress={handleRegister}>
 					<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
 				</TouchableOpacity>
 			</View>
@@ -389,9 +395,9 @@ export default function Register() {
 
 	return (
 		<ThemedView style={styles.container}>
-			<AmbientBackground />
-			
-			<KeyboardAvoidingView 
+			<AmbientBackground/>
+
+			<KeyboardAvoidingView
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 				style={styles.keyboardView}
 			>
@@ -399,12 +405,12 @@ export default function Register() {
 					<View style={styles.header}>
 						{step > 0 && (
 							<TouchableOpacity onPress={() => setStep(step - 1)} style={styles.backButton}>
-								<Text style={[styles.backButtonText, { color: mutedColor }]}>Voltar</Text>
+								<Text style={[styles.backButtonText, {color: mutedColor}]}>Voltar</Text>
 							</TouchableOpacity>
 						)}
 						{step === 0 && (
 							<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-								<Text style={[styles.backButtonText, { color: mutedColor }]}>Cancelar</Text>
+								<Text style={[styles.backButtonText, {color: mutedColor}]}>Cancelar</Text>
 							</TouchableOpacity>
 						)}
 					</View>
@@ -466,11 +472,11 @@ const styles = StyleSheet.create({
 		position: 'relative',
 	},
 	inputError: {
-		borderColor: '#EF4444', // red-500
+		borderColor: '#EF4444',
 		borderWidth: 1,
 	},
 	inputSuccess: {
-		borderColor: '#10B981', // emerald-500
+		borderColor: '#10B981',
 		borderWidth: 1,
 	},
 	errorText: {
@@ -551,12 +557,6 @@ const styles = StyleSheet.create({
 		padding: 16,
 		borderRadius: 16,
 		borderWidth: 1,
-	},
-	avatar: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		marginRight: 12,
 	},
 	psychologistInfo: {
 		flex: 1,

@@ -1,32 +1,25 @@
-import React, { useState } from 'react';
-import {
-	TouchableOpacity,
-	StyleSheet,
-	ActivityIndicator,
-	KeyboardAvoidingView,
-	Platform,
-	View,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
+import React, {useState} from 'react';
+import {ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, TouchableOpacity, View,} from 'react-native';
+import {useRouter} from 'expo-router';
+import {useAuth} from '@/context/AuthContext';
 import api from '@/services/api';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useToast } from '@/context/ToastContext';
-import { AmbientBackground } from '@/components/ui/ambient-background';
-import { GlassInput } from '@/components/ui/glass-input';
-import { ReframeLogo } from '@/components/ui/reframe-logo';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {ThemedView} from '@/components/themed-view';
+import {ThemedText} from '@/components/themed-text';
+import {useToast} from '@/context/ToastContext';
+import {AmbientBackground} from '@/components/ui/ambient-background';
+import {GlassInput} from '@/components/ui/glass-input';
+import {ReframeLogo} from '@/components/ui/reframe-logo';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
 
 export default function Login() {
 	const router = useRouter();
-	const { signIn } = useAuth();
-	const { showToast } = useToast();
+	const {signIn} = useAuth();
+	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
-  
+
 	const [username, setUsername] = useState('');
 	const [password, setPassword] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
@@ -49,9 +42,9 @@ export default function Login() {
 				password
 			});
 
-			const { token, userType } = response.data;
+			const {token, userType} = response.data;
 			await signIn(token, userType, username);
-      
+
 		} catch (error: any) {
 			console.error('Login error:', error);
 			const errorMessage = error.response?.data || 'Falha ao realizar login.';
@@ -63,26 +56,26 @@ export default function Login() {
 
 	return (
 		<ThemedView style={styles.container}>
-			<AmbientBackground />
+			<AmbientBackground/>
 
-			<KeyboardAvoidingView 
+			<KeyboardAvoidingView
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 				style={styles.keyboardView}
 			>
 				<AnimatedEntry style={styles.contentContainer}>
-					<ReframeLogo />
-          
+					<ReframeLogo/>
+
 					<View style={styles.formSection}>
 						<View style={styles.inputGroup}>
-							<GlassInput 
+							<GlassInput
 								placeholder="Email profissional ou usuário"
 								value={username}
 								onChangeText={setUsername}
 								autoCapitalize="none"
 								keyboardType="email-address"
 							/>
-              
-							<GlassInput 
+
+							<GlassInput
 								placeholder="Senha de acesso"
 								value={password}
 								onChangeText={setPassword}
@@ -91,35 +84,37 @@ export default function Login() {
 						</View>
 
 						<View style={[
-							styles.secondaryActionsContainer, 
-							{ 
+							styles.secondaryActionsContainer,
+							{
 								borderColor: borderColor,
 								backgroundColor: isDark ? 'rgba(255, 255, 255, 0.01)' : 'rgba(0, 0, 0, 0.01)'
 							}
 						]}>
-							<TouchableOpacity 
+							<TouchableOpacity
 								style={styles.secondaryButton}
 								onPress={() => router.push('/(auth)/forgetpassword')}
 							>
-								<ThemedText style={[styles.secondaryButtonText, { color: mutedColor }]}>Esqueci minha senha</ThemedText>
+								<ThemedText style={[styles.secondaryButtonText, {color: mutedColor}]}>Esqueci minha
+									senha</ThemedText>
 							</TouchableOpacity>
-							<View style={[styles.separator, { backgroundColor: borderColor }]} />
-							<TouchableOpacity 
+							<View style={[styles.separator, {backgroundColor: borderColor}]}/>
+							<TouchableOpacity
 								style={styles.secondaryButton}
 								onPress={() => router.push('/(auth)/register')}
 							>
-								<ThemedText style={[styles.secondaryButtonText, { color: tintColor }]}>Não tenho conta</ThemedText>
+								<ThemedText style={[styles.secondaryButtonText, {color: tintColor}]}>Não tenho
+									conta</ThemedText>
 							</TouchableOpacity>
 						</View>
-            
-						<TouchableOpacity 
-							style={[styles.primaryButton, { backgroundColor: tintColor }]}
+
+						<TouchableOpacity
+							style={[styles.primaryButton, {backgroundColor: tintColor}]}
 							onPress={handleLogin}
 							disabled={isLoading}
 							activeOpacity={0.8}
 						>
 							{isLoading ? (
-								<ActivityIndicator color="#FFFFFF" />
+								<ActivityIndicator color="#FFFFFF"/>
 							) : (
 								<ThemedText style={styles.primaryButtonText}>INICIAR REESTRUTURAÇÃO</ThemedText>
 							)}

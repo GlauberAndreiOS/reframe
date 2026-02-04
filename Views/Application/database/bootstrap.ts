@@ -1,10 +1,10 @@
-﻿import { initDatabase } from './index';
+import {initDatabase} from './index';
 
 let bootPromise: Promise<void> | null = null;
 
 export const ensureDbReady = async () => {
-    if (!bootPromise) {
-        bootPromise = initDatabase();
-    }
-    await bootPromise;
+	if (!bootPromise) {
+		bootPromise = initDatabase();
+	}
+	await bootPromise;
 };

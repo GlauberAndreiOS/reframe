@@ -1,5 +1,5 @@
 import * as Font from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
+import {Ionicons} from '@expo/vector-icons';
 
 export async function loadFonts() {
 	try {

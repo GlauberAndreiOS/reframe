@@ -13,6 +13,6 @@ export async function loadAuth() {
 		};
 	} catch (error) {
 		console.error('Failed to load auth state', error);
-		return { token: null, userType: null };
+		return {token: null, userType: null};
 	}
 }

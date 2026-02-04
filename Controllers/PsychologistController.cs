@@ -8,31 +8,20 @@ namespace reframe.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class PsychologistController : ControllerBase
+public class PsychologistController(ApplicationDbContext context) : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
-
-    public PsychologistController(ApplicationDbContext context)
-    {
-        _context = context;
-    }
-
-
     [HttpGet("profile")]
     [Authorize(Roles = "Psychologist")]
     public async Task<ActionResult<object>> GetProfile()
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var psychologist = await _context.Psychologists
+        var psychologist = await context.Psychologists
             .Include(p => p.User)
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        if (psychologist == null)
-        {
-            return NotFound("Psychologist profile not found.");
-        }
+        if (psychologist == null) return NotFound("Psychologist profile not found.");
 
-        return Ok(new 
+        return Ok(new
         {
             psychologist.Id,
             Name = psychologist.User?.Name ?? string.Empty,
@@ -47,17 +36,14 @@ public class PsychologistController : ControllerBase
     public async Task<ActionResult<IEnumerable<object>>> GetMyPatients()
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var psychologist = await _context.Psychologists
+        var psychologist = await context.Psychologists
             .Include(p => p.Patients)
-                .ThenInclude(pat => pat.User) // Include User for Patient to get Name
+            .ThenInclude(pat => pat.User)
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        if (psychologist == null)
-        {
-            return NotFound("Psychologist profile not found.");
-        }
+        if (psychologist == null) return NotFound("Psychologist profile not found.");
 
-        var result = psychologist.Patients.Select(p => new 
+        var result = psychologist.Patients.Select(p => new
         {
             p.Id,
             Name = p.User?.Name ?? string.Empty
@@ -68,22 +54,17 @@ public class PsychologistController : ControllerBase
 
 
     [HttpGet("search")]
-    [AllowAnonymous] 
-    public async Task<ActionResult<IEnumerable<object>>> SearchPsychologists([FromQuery] string? name, [FromQuery] string? crp)
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<object>>> SearchPsychologists([FromQuery] string? name,
+        [FromQuery] string? crp)
     {
-        var query = _context.Psychologists.Include(p => p.User).AsQueryable();
+        var query = context.Psychologists.Include(p => p.User).AsQueryable();
 
-        if (!string.IsNullOrEmpty(name))
-        {
-            query = query.Where(p => p.User != null && p.User.Name.Contains(name));
-        }
+        if (!string.IsNullOrEmpty(name)) query = query.Where(p => p.User != null && p.User.Name.Contains(name));
 
-        if (!string.IsNullOrEmpty(crp))
-        {
-            query = query.Where(p => p.CRP.Contains(crp));
-        }
+        if (!string.IsNullOrEmpty(crp)) query = query.Where(p => p.CRP.Contains(crp));
 
-        var result = await query.Select(p => new 
+        var result = await query.Select(p => new
         {
             p.Id,
             Name = p.User != null ? p.User.Name : string.Empty,
@@ -99,9 +80,9 @@ public class PsychologistController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<object>>> GetAllPsychologists()
     {
-        var result = await _context.Psychologists
+        var result = await context.Psychologists
             .Include(p => p.User)
-            .Select(p => new 
+            .Select(p => new
             {
                 p.Id,
                 Name = p.User != null ? p.User.Name : string.Empty,
@@ -113,53 +94,47 @@ public class PsychologistController : ControllerBase
         return Ok(result);
     }
 
-    // PUT: api/Psychologist/patient/{patientId}/unlink
+
     [HttpPut("patient/{patientId}/unlink")]
     [Authorize(Roles = "Psychologist")]
     public async Task<IActionResult> UnlinkPatient(Guid patientId)
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var psychologist = await _context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (psychologist == null) return NotFound("Psychologist profile not found.");
 
-        var patient = await _context.Patients.FindAsync(patientId);
+        var patient = await context.Patients.FindAsync(patientId);
         if (patient == null) return NotFound("Patient not found.");
 
-        if (patient.PsychologistId != psychologist.Id)
-        {
-            return BadRequest("This patient is not linked to you.");
-        }
+        if (patient.PsychologistId != psychologist.Id) return BadRequest("This patient is not linked to you.");
 
         patient.PsychologistId = null;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return Ok("Patient unlinked successfully.");
     }
 
-    // PUT: api/Psychologist/patient/{patientId}/transfer/{targetPsychologistId}
+
     [HttpPut("patient/{patientId}/transfer/{targetPsychologistId}")]
     [Authorize(Roles = "Psychologist")]
     public async Task<IActionResult> TransferPatient(Guid patientId, Guid targetPsychologistId)
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var currentPsychologist = await _context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        var currentPsychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (currentPsychologist == null) return NotFound("Current psychologist profile not found.");
 
-        var patient = await _context.Patients.FindAsync(patientId);
+        var patient = await context.Patients.FindAsync(patientId);
         if (patient == null) return NotFound("Patient not found.");
 
-        if (patient.PsychologistId != currentPsychologist.Id)
-        {
-            return BadRequest("This patient is not linked to you.");
-        }
+        if (patient.PsychologistId != currentPsychologist.Id) return BadRequest("This patient is not linked to you.");
 
-        var targetPsychologist = await _context.Psychologists.FindAsync(targetPsychologistId);
+        var targetPsychologist = await context.Psychologists.FindAsync(targetPsychologistId);
         if (targetPsychologist == null) return NotFound("Target psychologist not found.");
 
         patient.PsychologistId = targetPsychologistId;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return Ok("Patient transferred successfully.");
     }

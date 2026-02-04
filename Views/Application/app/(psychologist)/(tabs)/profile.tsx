@@ -1,26 +1,29 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '@/context/AuthContext';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useAuth} from '@/context/AuthContext';
 import api from '@/services/api';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useToast } from '@/context/ToastContext';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import {ThemedText} from '@/components/themed-text';
+import {ThemedView} from '@/components/themed-view';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useToast} from '@/context/ToastContext';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {IconSymbol} from '@/components/ui/icon-symbol';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {AmbientBackground} from '@/components/ui/ambient-background';
+import {Avatar} from '@/components/ui/avatar';
 
 interface PsychologistProfile {
     id: number;
     name: string;
     crp: string;
     email: string;
+    profilePictureUrl?: string;
 }
 
 export default function ProfileScreen() {
-	const { signOut } = useAuth();
-	const { showToast } = useToast();
+	const {signOut, token} = useAuth();
+	const {showToast} = useToast();
 	const [profile, setProfile] = useState<PsychologistProfile | null>(null);
 	const [loading, setLoading] = useState(true);
 
@@ -48,25 +51,51 @@ export default function ProfileScreen() {
 		fetchProfile();
 	}, [fetchProfile]);
 
+	const handleUpload = async (formData: any) => {
+		try {
+			const response = await api.post('/Profile/upload-picture', formData, {
+				headers: {
+					'Content-Type': 'multipart/form-data',
+					Authorization: `Bearer ${token}`
+				},
+			});
+            
+			if (profile) {
+				setProfile({...profile, profilePictureUrl: response.data.url});
+			}
+			showToast('Foto de perfil atualizada!', 'success');
+		} catch (error) {
+			console.error('Upload error:', error);
+			showToast('Erro ao atualizar foto.', 'error');
+		}
+	};
+
 	if (loading) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
-				<ActivityIndicator size="large" color={tintColor} />
+				<ActivityIndicator size="large" color={tintColor}/>
 			</ThemedView>
 		);
 	}
 
 	return (
 		<ThemedView style={styles.container}>
+			<AmbientBackground/>
 			<SafeAreaView style={styles.safeArea}>
 				<AnimatedEntry style={styles.content}>
 					<View style={styles.header}>
-						<View style={[styles.avatarPlaceholder, { backgroundColor: tintColor + '20' }]}>
-							<IconSymbol name="person.fill" size={40} color={tintColor} />
+						<View style={{marginBottom: 16}}>
+							<Avatar 
+								uri={profile?.profilePictureUrl} 
+								size={100} 
+								editable={true}
+								onUpload={handleUpload}
+								name={profile?.name}
+							/>
 						</View>
-						<ThemedText 
-							type="title" 
-							style={styles.name} 
+						<ThemedText
+							type="title"
+							style={styles.name}
 							numberOfLines={1}
 						>
 							{profile?.name}
@@ -74,17 +103,18 @@ export default function ProfileScreen() {
 					</View>
 
 					<View style={styles.section}>
-						<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>INFORMAÇÕES PROFISSIONAIS</ThemedText>
+						<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>INFORMAÇÕES
+							PROFISSIONAIS</ThemedText>
 						<View style={[
-							styles.card, 
-							{ 
+							styles.card,
+							{
 								backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-								borderColor: borderColor 
+								borderColor: borderColor
 							}
 						]}>
 							<View style={styles.infoRow}>
-								<View style={[styles.iconBox, { backgroundColor: tintColor + '15' }]}>
-									<IconSymbol name="doc.text.fill" size={18} color={tintColor} />
+								<View style={[styles.iconBox, {backgroundColor: tintColor + '15'}]}>
+									<IconSymbol name="doc.text.fill" size={18} color={tintColor}/>
 								</View>
 								<View>
 									<ThemedText style={styles.label}>CRP</ThemedText>
@@ -92,11 +122,11 @@ export default function ProfileScreen() {
 								</View>
 							</View>
 
-							<View style={[styles.divider, { backgroundColor: borderColor }]} />
+							<View style={[styles.divider, {backgroundColor: borderColor}]}/>
 
 							<View style={styles.infoRow}>
-								<View style={[styles.iconBox, { backgroundColor: tintColor + '15' }]}>
-									<IconSymbol name="envelope.fill" size={18} color={tintColor} />
+								<View style={[styles.iconBox, {backgroundColor: tintColor + '15'}]}>
+									<IconSymbol name="envelope.fill" size={18} color={tintColor}/>
 								</View>
 								<View>
 									<ThemedText style={styles.label}>Email</ThemedText>
@@ -105,12 +135,12 @@ export default function ProfileScreen() {
 							</View>
 						</View>
 					</View>
-          
-					<TouchableOpacity 
-						style={[styles.logoutButton, { borderColor: '#EF4444' }]} 
+
+					<TouchableOpacity
+						style={[styles.logoutButton, {borderColor: '#EF4444'}]}
 						onPress={signOut}
 					>
-						<IconSymbol name="arrow.right.square" size={20} color="#EF4444" />
+						<IconSymbol name="arrow.right.square" size={20} color="#EF4444"/>
 						<ThemedText style={styles.logoutText}>Sair da conta</ThemedText>
 					</TouchableOpacity>
 				</AnimatedEntry>
@@ -137,14 +167,6 @@ const styles = StyleSheet.create({
 	header: {
 		alignItems: 'center',
 		marginBottom: 40,
-	},
-	avatarPlaceholder: {
-		width: 80,
-		height: 80,
-		borderRadius: 40,
-		justifyContent: 'center',
-		alignItems: 'center',
-		marginBottom: 16,
 	},
 	name: {
 		marginBottom: 4,
@@ -190,7 +212,7 @@ const styles = StyleSheet.create({
 	divider: {
 		height: 1,
 		opacity: 0.5,
-		marginLeft: 72, // Align with text
+		marginLeft: 72,
 	},
 	logoutButton: {
 		flexDirection: 'row',

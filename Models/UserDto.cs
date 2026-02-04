@@ -9,8 +9,8 @@ public class UserDto
     public string? Name { get; set; }
     public string? Email { get; set; }
 
-    public string? CrpNumber { get; set; } // Apenas o número
-    public string? CrpUf { get; set; }     // Estado (ex: SP, RJ)
+    public string? CrpNumber { get; set; }
+    public string? CrpUf { get; set; }
 
     public Guid? PsychologistId { get; set; }
 }

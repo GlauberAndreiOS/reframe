@@ -1,27 +1,27 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
-	View,
-	TouchableOpacity,
-	StyleSheet,
 	ActivityIndicator,
 	KeyboardAvoidingView,
 	Platform,
+	StyleSheet,
 	Text,
+	TouchableOpacity,
+	View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import {useRouter} from 'expo-router';
 import api from '@/services/api';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useToast } from '@/context/ToastContext';
+import {ThemedView} from '@/components/themed-view';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useToast} from '@/context/ToastContext';
 
-import { AmbientBackground } from '@/components/ui/ambient-background';
-import { GlassInput } from '@/components/ui/glass-input';
-import { ReframeLogo } from '@/components/ui/reframe-logo';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
+import {AmbientBackground} from '@/components/ui/ambient-background';
+import {GlassInput} from '@/components/ui/glass-input';
+import {ReframeLogo} from '@/components/ui/reframe-logo';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
 
 export default function ForgetPassword() {
 	const router = useRouter();
-	const { showToast } = useToast();
+	const {showToast} = useToast();
 	const [email, setEmail] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
 
@@ -37,11 +37,11 @@ export default function ForgetPassword() {
 		setIsLoading(true);
 
 		try {
-			await api.post('/Auth/forgot-password', { email });
-			
+			await api.post('/Auth/forgot-password', {email});
+
 			showToast('Instruções enviadas para o seu e-mail.', 'success');
 			setTimeout(() => router.back(), 2000);
-			
+
 		} catch (error: any) {
 			console.error('Forgot password error:', error);
 			const errorMessage = error.response?.data || 'Falha ao solicitar recuperação de senha.';
@@ -53,22 +53,22 @@ export default function ForgetPassword() {
 
 	return (
 		<ThemedView style={styles.container}>
-			<AmbientBackground />
+			<AmbientBackground/>
 
-			<KeyboardAvoidingView 
+			<KeyboardAvoidingView
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 				style={styles.keyboardView}
 			>
 				<AnimatedEntry style={styles.contentContainer}>
-					<ReframeLogo />
-					
+					<ReframeLogo/>
+
 					<View style={styles.formSection}>
-						<Text style={[styles.description, { color: mutedColor }]}>
+						<Text style={[styles.description, {color: mutedColor}]}>
 							Insira seu e-mail para receber as instruções de redefinição de senha.
 						</Text>
 
 						<View style={styles.inputGroup}>
-							<GlassInput 
+							<GlassInput
 								placeholder="E-mail cadastrado"
 								value={email}
 								onChangeText={setEmail}
@@ -77,21 +77,21 @@ export default function ForgetPassword() {
 							/>
 						</View>
 
-						<TouchableOpacity 
-							style={[styles.primaryButton, { backgroundColor: tintColor }]}
+						<TouchableOpacity
+							style={[styles.primaryButton, {backgroundColor: tintColor}]}
 							onPress={handleResetPassword}
 							disabled={isLoading}
 							activeOpacity={0.8}
 						>
 							{isLoading ? (
-								<ActivityIndicator color="#FFFFFF" />
+								<ActivityIndicator color="#FFFFFF"/>
 							) : (
 								<Text style={styles.primaryButtonText}>ENVIAR INSTRUÇÕES</Text>
 							)}
 						</TouchableOpacity>
 
 						<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-							<Text style={[styles.backButtonText, { color: mutedColor }]}>Voltar para Login</Text>
+							<Text style={[styles.backButtonText, {color: mutedColor}]}>Voltar para Login</Text>
 						</TouchableOpacity>
 					</View>
 				</AnimatedEntry>

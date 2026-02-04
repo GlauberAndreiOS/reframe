@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, FlatList, StyleSheet, View} from 'react-native';
+import {Stack, useLocalSearchParams} from 'expo-router';
 import api from '@/services/api';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useToast } from '@/context/ToastContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import {ThemedText} from '@/components/themed-text';
+import {ThemedView} from '@/components/themed-view';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useToast} from '@/context/ToastContext';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {IconSymbol} from '@/components/ui/icon-symbol';
 
 interface AutomaticThought {
     id: number;
@@ -24,8 +24,8 @@ interface AutomaticThought {
 }
 
 export default function PatientThoughtsScreen() {
-	const { id, name } = useLocalSearchParams();
-	const { showToast } = useToast();
+	const {id, name} = useLocalSearchParams();
+	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
@@ -57,33 +57,36 @@ export default function PatientThoughtsScreen() {
 
 	const formatDate = (dateString: string) => {
 		const date = new Date(dateString);
-		return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+		return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', {
+			hour: '2-digit',
+			minute: '2-digit'
+		})}`;
 	};
 
 	return (
 		<ThemedView style={styles.container}>
-			<Stack.Screen 
-				options={{ 
-					title: name as string, 
+			<Stack.Screen
+				options={{
+					title: name as string,
 					headerBackTitle: 'Voltar',
-					headerStyle: { backgroundColor: 'transparent' },
+					headerStyle: {backgroundColor: 'transparent'},
 					headerTransparent: true,
 					headerTintColor: tintColor,
-				}} 
+				}}
 			/>
-	
-			<View style={styles.headerSpacer} />
+
+			<View style={styles.headerSpacer}/>
 
 			<View style={styles.header}>
 				<ThemedText type="title">Pensamentos de {name}</ThemedText>
-				<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
+				<ThemedText style={{color: mutedColor, fontSize: 14}}>
 					Histórico de registros
 				</ThemedText>
 			</View>
 
 			{loading ? (
 				<View style={styles.center}>
-					<ActivityIndicator size="large" color={tintColor} />
+					<ActivityIndicator size="large" color={tintColor}/>
 				</View>
 			) : (
 				<FlatList
@@ -93,73 +96,77 @@ export default function PatientThoughtsScreen() {
 					showsVerticalScrollIndicator={false}
 					ListEmptyComponent={
 						<View style={styles.center}>
-							<IconSymbol name="doc.text" size={48} color={mutedColor} />
-							<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+							<IconSymbol name="doc.text" size={48} color={mutedColor}/>
+							<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
 								Nenhum pensamento registrado por este paciente.
 							</ThemedText>
 						</View>
 					}
-					renderItem={({ item, index }) => (
+					renderItem={({item, index}) => (
 						<AnimatedEntry delay={index * 100} duration={600}>
 							<View style={[
-								styles.card, 
-								{ 
+								styles.card,
+								{
 									backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-									borderColor: borderColor 
+									borderColor: borderColor
 								}
 							]}>
 								<View style={styles.cardHeader}>
-									<ThemedText style={[styles.date, { color: mutedColor }]}>
+									<ThemedText style={[styles.date, {color: mutedColor}]}>
 										{formatDate(item.date)}
 									</ThemedText>
-									<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
-										<ThemedText style={[styles.emotion, { color: tintColor }]}>
+									<View style={[styles.emotionBadge, {backgroundColor: tintColor + '20'}]}>
+										<ThemedText style={[styles.emotion, {color: tintColor}]}>
 											{item.emotion}
 										</ThemedText>
 									</View>
 								</View>
 
 								<View style={styles.section}>
-									<ThemedText style={[styles.label, { color: mutedColor }]}>SITUAÇÃO</ThemedText>
+									<ThemedText style={[styles.label, {color: mutedColor}]}>SITUAÇÃO</ThemedText>
 									<ThemedText style={styles.content}>{item.situation}</ThemedText>
 								</View>
 
 								<View style={styles.section}>
-									<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTO</ThemedText>
+									<ThemedText style={[styles.label, {color: mutedColor}]}>PENSAMENTO</ThemedText>
 									<ThemedText style={styles.content}>{item.thought}</ThemedText>
 								</View>
 
 								{!!item.behavior && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>COMPORTAMENTO</ThemedText>
+										<ThemedText
+											style={[styles.label, {color: mutedColor}]}>COMPORTAMENTO</ThemedText>
 										<ThemedText style={styles.content}>{item.behavior}</ThemedText>
 									</View>
 								)}
 
 								{!!item.evidencePro && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS A FAVOR</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>EVIDÊNCIAS A
+											FAVOR</ThemedText>
 										<ThemedText style={styles.content}>{item.evidencePro}</ThemedText>
 									</View>
 								)}
 
 								{!!item.evidenceContra && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS CONTRA</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>EVIDÊNCIAS
+											CONTRA</ThemedText>
 										<ThemedText style={styles.content}>{item.evidenceContra}</ThemedText>
 									</View>
 								)}
 
 								{!!item.alternativeThoughts && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTOS ALTERNATIVOS</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>PENSAMENTOS
+											ALTERNATIVOS</ThemedText>
 										<ThemedText style={styles.content}>{item.alternativeThoughts}</ThemedText>
 									</View>
 								)}
 
 								{!!item.reevaluation && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>REAVALIAÇÃO</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>REAVALIAÇÃO</ThemedText>
 										<ThemedText style={styles.content}>{item.reevaluation}</ThemedText>
 									</View>
 								)}

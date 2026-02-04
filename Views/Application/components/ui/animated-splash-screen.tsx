@@ -1,22 +1,18 @@
-import React, { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import Animated, { 
-	useSharedValue, 
-	useAnimatedStyle, 
-	withTiming, 
-} from 'react-native-reanimated';
+import React, {useEffect} from 'react';
+import {StyleSheet} from 'react-native';
+import {useRouter} from 'expo-router';
+import Animated, {useAnimatedStyle, useSharedValue, withTiming,} from 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { ThemedView } from '@/components/themed-view';
-import { useAuth } from '@/context/AuthContext';
-import { AmbientBackground } from '@/components/ui/ambient-background';
-import { ReframeLogo } from '@/components/ui/reframe-logo';
+import {ThemedView} from '@/components/themed-view';
+import {useAuth} from '@/context/AuthContext';
+import {AmbientBackground} from '@/components/ui/ambient-background';
+import {ReframeLogo} from '@/components/ui/reframe-logo';
 
 export function AnimatedSplashScreen() {
 	const router = useRouter();
-	const { token, userType } = useAuth();
-  
+	const {token, userType} = useAuth();
+
 	const opacity = useSharedValue(0);
 	const scale = useSharedValue(0.95);
 
@@ -24,13 +20,13 @@ export function AnimatedSplashScreen() {
 		const animateAndNavigate = async () => {
 			await SplashScreen.hideAsync();
 
-			opacity.value = withTiming(1, { duration: 1000 });
-			scale.value = withTiming(1, { duration: 1000 });
+			opacity.value = withTiming(1, {duration: 1000});
+			scale.value = withTiming(1, {duration: 1000});
 
 			const timeout = setTimeout(() => {
 				if (token) {
 					const href = userType === 0 ? "/(psychologist)" : "/(patient)";
-					// @ts-ignore
+
 					router.replace(href);
 				} else {
 					router.replace("/(auth)/login");
@@ -45,15 +41,15 @@ export function AnimatedSplashScreen() {
 
 	const animatedStyle = useAnimatedStyle(() => ({
 		opacity: opacity.value,
-		transform: [{ scale: scale.value }],
+		transform: [{scale: scale.value}],
 	}));
 
 	return (
 		<ThemedView style={styles.container}>
-			<AmbientBackground />
-      
+			<AmbientBackground/>
+
 			<Animated.View style={[styles.content, animatedStyle]}>
-				<ReframeLogo />
+				<ReframeLogo/>
 			</Animated.View>
 		</ThemedView>
 	);

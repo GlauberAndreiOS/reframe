@@ -9,38 +9,23 @@ namespace reframe.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class PatientController : ControllerBase
+public class PatientController(ApplicationDbContext context, ILogger<PatientController> logger)
+    : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ILogger<PatientController> _logger;
-
-    public PatientController(ApplicationDbContext context, ILogger<PatientController> logger)
-    {
-        _context = context;
-        _logger = logger;
-    }
-
-
     [HttpPost("link/{psychologistId}")]
     [Authorize(Roles = "Patient")]
     public async Task<IActionResult> LinkToPsychologist(Guid psychologistId)
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
 
-        if (patient == null)
-        {
-            return NotFound("Patient profile not found.");
-        }
+        if (patient == null) return NotFound("Patient profile not found.");
 
-        var psychologist = await _context.Psychologists.FindAsync(psychologistId);
-        if (psychologist == null)
-        {
-            return NotFound("Psychologist not found.");
-        }
+        var psychologist = await context.Psychologists.FindAsync(psychologistId);
+        if (psychologist == null) return NotFound("Psychologist not found.");
 
         patient.PsychologistId = psychologistId;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return Ok("Successfully linked to psychologist.");
     }
@@ -51,24 +36,18 @@ public class PatientController : ControllerBase
     public async Task<IActionResult> UpdatePsychologistLink([FromBody] UpdatePsychologistDto dto)
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var patient = await _context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
 
-        if (patient == null)
-        {
-            return NotFound("Patient profile not found.");
-        }
+        if (patient == null) return NotFound("Patient profile not found.");
 
         if (dto.PsychologistId.HasValue)
         {
-            var psychologist = await _context.Psychologists.FindAsync(dto.PsychologistId.Value);
-            if (psychologist == null)
-            {
-                return NotFound("Psychologist not found.");
-            }
+            var psychologist = await context.Psychologists.FindAsync(dto.PsychologistId.Value);
+            if (psychologist == null) return NotFound("Psychologist not found.");
         }
 
         patient.PsychologistId = dto.PsychologistId;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return Ok("Psychologist link updated successfully.");
     }
@@ -79,34 +58,36 @@ public class PatientController : ControllerBase
     public async Task<ActionResult<object>> GetProfile()
     {
         var userIdClaim = User.FindFirst("UserId")?.Value;
-        _logger.LogInformation($"DEBUG: GetProfile called. UserId claim: {userIdClaim}");
+        logger.LogInformation($"DEBUG: GetProfile called. UserId claim: {userIdClaim}");
 
         var userId = Guid.Parse(userIdClaim ?? Guid.Empty.ToString());
-        
-        var patient = await _context.Patients
+
+        var patient = await context.Patients
             .Include(p => p.User)
             .Include(p => p.Psychologist)
-                .ThenInclude(psy => psy!.User) // Include User for Psychologist to get Name
+            .ThenInclude(psy => psy!.User)
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null)
         {
-            _logger.LogWarning($"DEBUG: Patient profile not found for UserId: {userId}");
+            logger.LogWarning($"DEBUG: Patient profile not found for UserId: {userId}");
             return NotFound();
         }
 
-        _logger.LogInformation($"DEBUG: Patient found: {patient.User?.Name}, PsychologistId: {patient.PsychologistId}");
+        logger.LogInformation($"DEBUG: Patient found: {patient.User?.Name}, PsychologistId: {patient.PsychologistId}");
 
-        return Ok(new 
+        return Ok(new
         {
             patient.Id,
             Name = patient.User?.Name ?? string.Empty,
-            Psychologist = patient.Psychologist != null ? new 
-            {
-                Id = patient.Psychologist.Id,
-                Name = patient.Psychologist.User?.Name ?? string.Empty,
-                CRP = patient.Psychologist.CRP
-            } : null
+            Psychologist = patient.Psychologist != null
+                ? new
+                {
+                    patient.Psychologist.Id,
+                    Name = patient.Psychologist.User?.Name ?? string.Empty,
+                    patient.Psychologist.CRP
+                }
+                : null
         });
     }
 }

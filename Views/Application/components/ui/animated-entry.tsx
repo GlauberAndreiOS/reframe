@@ -1,31 +1,25 @@
-import React, { useEffect } from 'react';
-import { ViewProps } from 'react-native';
-import Animated, { 
-	useSharedValue, 
-	useAnimatedStyle, 
-	withTiming, 
-	Easing,
-	withDelay
-} from 'react-native-reanimated';
+import React, {useEffect} from 'react';
+import {ViewProps} from 'react-native';
+import Animated, {Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming} from 'react-native-reanimated';
 
 interface AnimatedEntryProps extends ViewProps {
-  delay?: number;
-  duration?: number;
+    delay?: number;
+    duration?: number;
 }
 
-export function AnimatedEntry({ 
-	children, 
-	style, 
-	delay = 0, 
+export function AnimatedEntry({
+	children,
+	style,
+	delay = 0,
 	duration = 800,
-	...props 
+	...props
 }: AnimatedEntryProps) {
 	const fadeOpacity = useSharedValue(0);
 	const contentTranslateY = useSharedValue(20);
 
 	useEffect(() => {
-		const animation = withTiming(1, { duration });
-		const translateAnimation = withTiming(0, { duration, easing: Easing.out(Easing.cubic) });
+		const animation = withTiming(1, {duration});
+		const translateAnimation = withTiming(0, {duration, easing: Easing.out(Easing.cubic)});
 
 		if (delay > 0) {
 			fadeOpacity.value = withDelay(delay, animation);
@@ -38,7 +32,7 @@ export function AnimatedEntry({
 
 	const animatedStyle = useAnimatedStyle(() => ({
 		opacity: fadeOpacity.value,
-		transform: [{ translateY: contentTranslateY.value }],
+		transform: [{translateY: contentTranslateY.value}],
 	}));
 
 	return (

@@ -1,6 +1,6 @@
-import { Tabs } from 'expo-router';
+import {Tabs} from 'expo-router';
 import FloatingTabs from '@/components/floating-tabs';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import {IconSymbol} from '@/components/ui/icon-symbol';
 
 export default function TabsPsychologistLayout() {
 	return (
@@ -10,18 +10,25 @@ export default function TabsPsychologistLayout() {
 			}}
 			tabBar={(props) => <FloatingTabs {...props} />}
 		>
-			<Tabs.Screen 
-				name="index" 
+			<Tabs.Screen
+				name="index"
 				options={{
 					title: 'Pacientes',
-					tabBarIcon: ({ color }) => <IconSymbol name="person.2.fill" size={24} color={color} />,
+					tabBarIcon: ({color}) => <IconSymbol name="person.2.fill" size={24} color={color}/>,
 				}}
 			/>
-			<Tabs.Screen 
-				name="profile" 
+			<Tabs.Screen
+				name="questionnaires"
+				options={{
+					title: 'Questionários',
+					tabBarIcon: ({color}) => <IconSymbol name="doc.text.fill" size={24} color={color}/>,
+				}}
+			/>
+			<Tabs.Screen
+				name="profile"
 				options={{
 					title: 'Perfil',
-					tabBarIcon: ({ color }) => <IconSymbol name="person.fill" size={24} color={color} />,
+					tabBarIcon: ({color}) => <IconSymbol name="person.fill" size={24} color={color}/>,
 				}}
 			/>
 		</Tabs>

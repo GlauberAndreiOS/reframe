@@ -1,45 +1,50 @@
-import { useEffect, useState } from 'react';
+import {useEffect, useState} from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
-import { ensureDbReady } from '@/database/bootstrap';
+import {ensureDbReady} from '@/database/bootstrap';
 
 SplashScreen.preventAutoHideAsync();
 
 export function useBootstrap() {
-    const [ready, setReady] = useState(false);
-    const [data, setData] = useState<{ auth: { token: string | null, userType: number | null } }>({ auth: { token: null, userType: null } });
+	const [ready, setReady] = useState(false);
+	const [data, setData] = useState<{ auth: { token: string | null, userType: number | null } }>({
+		auth: {
+			token: null,
+			userType: null
+		}
+	});
 
-    useEffect(() => {
-        async function prepare() {
-            try {
-                const dbPromise = ensureDbReady();
+	useEffect(() => {
+		async function prepare() {
+			try {
+				const dbPromise = ensureDbReady();
 
-                const tokenPromise = SecureStore.getItemAsync('token');
-                const userTypePromise = SecureStore.getItemAsync('userType');
+				const tokenPromise = SecureStore.getItemAsync('token');
+				const userTypePromise = SecureStore.getItemAsync('userType');
 
-                const [token, userType] = await Promise.all([
-                    tokenPromise,
-                    userTypePromise,
-                    dbPromise,
-                ]);
+				const [token, userType] = await Promise.all([
+					tokenPromise,
+					userTypePromise,
+					dbPromise,
+				]);
 
-                setData({
-                    auth: {
-                        token,
-                        userType: userType ? parseInt(userType, 10) : null,
-                    },
-                });
+				setData({
+					auth: {
+						token,
+						userType: userType ? parseInt(userType, 10) : null,
+					},
+				});
 
-            } catch (e) {
-                console.warn(e);
-            } finally {
-                setReady(true);
-                await SplashScreen.hideAsync();
-            }
-        }
+			} catch (e) {
+				console.warn(e);
+			} finally {
+				setReady(true);
+				await SplashScreen.hideAsync();
+			}
+		}
 
-        void prepare();
-    }, []);
+		void prepare();
+	}, []);
 
-    return { ready, data };
+	return {ready, data};
 }

@@ -1,22 +1,22 @@
-import React, { ReactNode } from 'react';
-import { TextInput, TextInputProps, StyleSheet, View, Text } from 'react-native';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import React, {ReactNode} from 'react';
+import {StyleSheet, Text, TextInput, TextInputProps, View} from 'react-native';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useColorScheme} from '@/hooks/use-color-scheme';
 
 export type HelperTextType = 'error' | 'success' | 'info';
 
 interface GlassInputProps extends TextInputProps {
-  helperText?: {
-    text: string;
-    type: HelperTextType;
-  } | null;
-  rightAdornment?: ReactNode;
+    helperText?: {
+        text: string;
+        type: HelperTextType;
+    } | null;
+    rightAdornment?: ReactNode;
 }
 
-export function GlassInput({ helperText, rightAdornment, style, ...props }: GlassInputProps) {
+export function GlassInput({helperText, rightAdornment, style, ...props}: GlassInputProps) {
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
-  
+
 	const textColor = useThemeColor({}, 'text');
 	const borderColor = useThemeColor({}, 'border');
 	const placeholderColor = useThemeColor({}, 'muted');
@@ -24,30 +24,34 @@ export function GlassInput({ helperText, rightAdornment, style, ...props }: Glas
 	const getStatusColor = () => {
 		if (!helperText) return borderColor;
 		switch (helperText.type) {
-		case 'error': return '#EF4444';   // red-500
-		case 'success': return '#10B981'; // emerald-500
-		case 'info': return '#3B82F6';    // blue-500
-		default: return borderColor;
+		case 'error':
+			return '#EF4444';
+		case 'success':
+			return '#10B981';
+		case 'info':
+			return '#3B82F6';
+		default:
+			return borderColor;
 		}
 	};
-  
+
 	return (
 		<View style={styles.container}>
 			<View style={[
 				styles.inputContainer,
-				{ 
+				{
 					backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
 					borderColor: getStatusColor(),
 				},
-				// @ts-ignore
+
 				style
 			]}>
-				<TextInput 
+				<TextInput
 					style={[
-						styles.input, 
-						{ color: textColor },
-						// @ts-ignore
-						rightAdornment && { paddingRight: 48 }
+						styles.input,
+						{color: textColor},
+
+						rightAdornment && {paddingRight: 48}
 					]}
 					placeholderTextColor={placeholderColor}
 					{...props}
@@ -58,9 +62,9 @@ export function GlassInput({ helperText, rightAdornment, style, ...props }: Glas
 					</View>
 				)}
 			</View>
-      
+
 			{helperText && (
-				<Text style={[styles.helperText, { color: getStatusColor() }]}>
+				<Text style={[styles.helperText, {color: getStatusColor()}]}>
 					{helperText.text}
 				</Text>
 			)}

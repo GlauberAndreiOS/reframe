@@ -1,34 +1,38 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '@/context/AuthContext';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useAuth} from '@/context/AuthContext';
 import api from '@/services/api';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useToast } from '@/context/ToastContext';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { PsychologistPickerModal } from '@/components/ui/psychologist-picker-modal';
+import {ThemedText} from '@/components/themed-text';
+import {ThemedView} from '@/components/themed-view';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useToast} from '@/context/ToastContext';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {IconSymbol} from '@/components/ui/icon-symbol';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {PsychologistPickerModal} from '@/components/ui/psychologist-picker-modal';
+import {AmbientBackground} from '@/components/ui/ambient-background';
+import {Avatar} from '@/components/ui/avatar';
 
 interface PatientProfile {
     id: number;
     name: string;
+    profilePictureUrl?: string;
     psychologist?: {
         id: number;
         name: string;
         crp: string;
+        profilePictureUrl?: string;
     };
 }
 
 export default function ProfileScreen() {
-	const { signOut } = useAuth();
-	const { showToast } = useToast();
+	const {signOut, token} = useAuth();
+	const {showToast} = useToast();
 	const [profile, setProfile] = useState<PatientProfile | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [isPickerVisible, setIsPickerVisible] = useState(false);
-  
+
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
@@ -53,18 +57,37 @@ export default function ProfileScreen() {
 		fetchProfile();
 	}, [fetchProfile]);
 
+	const handleUpload = async (formData: any) => {
+		try {
+			const response = await api.post('/Profile/upload-picture', formData, {
+				headers: {
+					'Content-Type': 'multipart/form-data',
+					Authorization: `Bearer ${token}`
+				},
+			});
+            
+			if (profile) {
+				setProfile({...profile, profilePictureUrl: response.data.url});
+			}
+			showToast('Foto de perfil atualizada!', 'success');
+		} catch (error) {
+			console.error('Upload error:', error);
+			showToast('Erro ao atualizar foto.', 'error');
+		}
+	};
+
 	const handleUpdatePsychologist = async (psychologistId: number | null) => {
 		console.log('Updating psychologist link to:', psychologistId);
 		setIsPickerVisible(false);
 		try {
-			await api.put('/Patient/psychologist', { psychologistId });
-			
+			await api.put('/Patient/psychologist', {psychologistId});
+
 			if (psychologistId === null) {
 				showToast('Vínculo removido com sucesso!', 'success');
 			} else {
 				showToast('Vínculo atualizado com sucesso!', 'success');
 			}
-			
+
 			fetchProfile();
 		} catch (error) {
 			console.error('Failed to update psychologist:', error);
@@ -75,22 +98,29 @@ export default function ProfileScreen() {
 	if (loading) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
-				<ActivityIndicator size="large" color={tintColor} />
+				<ActivityIndicator size="large" color={tintColor}/>
 			</ThemedView>
 		);
 	}
 
 	return (
 		<ThemedView style={styles.container}>
+			<AmbientBackground/>
 			<SafeAreaView style={styles.safeArea}>
 				<AnimatedEntry style={styles.content}>
 					<View style={styles.header}>
-						<View style={[styles.avatarPlaceholder, { backgroundColor: tintColor + '20' }]}>
-							<IconSymbol name="person.fill" size={40} color={tintColor} />
+						<View style={{marginBottom: 16}}>
+							<Avatar 
+								uri={profile?.profilePictureUrl} 
+								size={100} 
+								editable={true}
+								onUpload={handleUpload}
+								name={profile?.name}
+							/>
 						</View>
-						<ThemedText 
-							type="title" 
-							style={styles.name} 
+						<ThemedText
+							type="title"
+							style={styles.name}
 							numberOfLines={1}
 						>
 							{profile?.name}
@@ -98,62 +128,67 @@ export default function ProfileScreen() {
 					</View>
 
 					<View style={styles.section}>
-						<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>PSICÓLOGO VINCULADO</ThemedText>
-						
+						<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>PSICÓLOGO VINCULADO</ThemedText>
+
 						<View style={[
-							styles.card, 
-							{ 
+							styles.card,
+							{
 								backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-								borderColor: borderColor 
+								borderColor: borderColor
 							}
 						]}>
 							{profile?.psychologist ? (
 								<View style={styles.psychologistContainer}>
 									<View style={styles.psychologistInfo}>
-										<View style={[styles.miniAvatar, { backgroundColor: tintColor }]}>
-											<IconSymbol name="star.fill" size={16} color="#FFF" />
+										<View style={{marginRight: 12}}>
+											<Avatar 
+												uri={profile.psychologist.profilePictureUrl} 
+												size={40} 
+												editable={false}
+												name={profile.psychologist.name}
+											/>
 										</View>
-										<View style={{ flex: 1 }}>
-											<ThemedText 
-												style={styles.psychologistName} 
+										<View style={{flex: 1}}>
+											<ThemedText
+												style={styles.psychologistName}
 												numberOfLines={1}
 											>
 												{profile.psychologist.name}
 											</ThemedText>
-											<ThemedText style={[styles.crp, { color: mutedColor }]}>
+											<ThemedText style={[styles.crp, {color: mutedColor}]}>
 												CRP: {profile.psychologist.crp}
 											</ThemedText>
 										</View>
 									</View>
-									
-									<TouchableOpacity 
+
+									<TouchableOpacity
 										onPress={() => setIsPickerVisible(true)}
-										style={[styles.iconButton, { backgroundColor: tintColor + '15' }]}
+										style={[styles.iconButton, {backgroundColor: tintColor + '15'}]}
 									>
-										<IconSymbol name="arrow.2.squarepath" size={20} color={tintColor} />
+										<IconSymbol name="arrow.2.squarepath" size={20} color={tintColor}/>
 									</TouchableOpacity>
 								</View>
 							) : (
 								<View style={styles.emptyStateContainer}>
-									<ThemedText style={{ color: mutedColor, fontStyle: 'italic', flex: 1 }}>
+									<ThemedText style={{color: mutedColor, fontStyle: 'italic', flex: 1}}>
 										Nenhum psicólogo vinculado
 									</ThemedText>
-									<TouchableOpacity 
+									<TouchableOpacity
 										onPress={() => setIsPickerVisible(true)}
-										style={[styles.iconButton, { backgroundColor: tintColor + '15' }]}
+										style={[styles.iconButton, {backgroundColor: tintColor + '15'}]}
 									>
-										<IconSymbol name="plus" size={20} color={tintColor} />
+										<IconSymbol name="plus" size={20} color={tintColor}/>
 									</TouchableOpacity>
 								</View>
 							)}
 						</View>
 					</View>
-          
-					<TouchableOpacity 
-						style={[styles.logoutButton, { borderColor: '#EF4444' }]} 
+
+					<TouchableOpacity
+						style={[styles.logoutButton, {borderColor: '#EF4444'}]}
 						onPress={signOut}
 					>
-						<IconSymbol name="arrow.right.square" size={20} color="#EF4444" />
+						<IconSymbol name="arrow.right.square" size={20} color="#EF4444"/>
 						<ThemedText style={styles.logoutText}>Sair da conta</ThemedText>
 					</TouchableOpacity>
 				</AnimatedEntry>
@@ -188,14 +223,6 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		marginBottom: 40,
 	},
-	avatarPlaceholder: {
-		width: 80,
-		height: 80,
-		borderRadius: 40,
-		justifyContent: 'center',
-		alignItems: 'center',
-		marginBottom: 16,
-	},
 	name: {
 		marginBottom: 4,
 		textAlign: 'center',
@@ -223,7 +250,6 @@ const styles = StyleSheet.create({
 	psychologistInfo: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		gap: 12,
 		flex: 1,
 		marginRight: 12,
 	},
@@ -231,13 +257,6 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-	},
-	miniAvatar: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
-		justifyContent: 'center',
-		alignItems: 'center',
 	},
 	psychologistName: {
 		fontSize: 16,

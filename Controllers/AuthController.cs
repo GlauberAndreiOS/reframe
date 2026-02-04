@@ -14,20 +14,10 @@ namespace reframe.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController : ControllerBase
+public class AuthController(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService)
+    : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IConfiguration _configuration;
-    private readonly IEmailService _emailService;
-
-    public AuthController(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService)
-    {
-        _context = context;
-        _configuration = configuration;
-        _emailService = emailService;
-    }
-
-    private bool IsValidEmail(string email)
+    private static bool IsValidEmail(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
             return false;
@@ -47,32 +37,21 @@ public class AuthController : ControllerBase
     [HttpGet("check-username/{username}")]
     public async Task<IActionResult> CheckUsername(string username)
     {
-        if (string.IsNullOrWhiteSpace(username))
-        {
-            return BadRequest("Username cannot be empty.");
-        }
+        if (string.IsNullOrWhiteSpace(username)) return BadRequest("Username cannot be empty.");
 
-        if (!IsValidEmail(username))
-        {
-            return BadRequest("Username must be a valid email.");
-        }
+        if (!IsValidEmail(username)) return BadRequest("Username must be a valid email.");
 
-        bool exists = await _context.Users.AnyAsync(u => u.Username == username);
+        var exists = await context.Users.AnyAsync(u => u.Username == username);
         return Ok(new { exists });
     }
 
     [HttpPost("register")]
     public async Task<IActionResult> Register(UserDto request)
     {
-        if (!IsValidEmail(request.Username))
-        {
-            return BadRequest("Username must be a valid email.");
-        }
+        if (!IsValidEmail(request.Username)) return BadRequest("Username must be a valid email.");
 
-        if (await _context.Users.AnyAsync(u => u.Username == request.Username))
-        {
+        if (await context.Users.AnyAsync(u => u.Username == request.Username))
             return BadRequest("User already exists.");
-        }
 
         var user = new User
         {
@@ -82,17 +61,17 @@ public class AuthController : ControllerBase
             Name = request.Name ?? ""
         };
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
 
         if (request.UserType == UserType.Psychologist)
         {
-            string fullCrp = $"{request.CrpNumber}/{request.CrpUf}"; 
-            
-            if (await _context.Psychologists.AnyAsync(p => p.CRP == fullCrp))
+            var fullCrp = $"{request.CrpNumber}/{request.CrpUf}";
+
+            if (await context.Psychologists.AnyAsync(p => p.CRP == fullCrp))
             {
-                _context.Users.Remove(user);
-                await _context.SaveChangesAsync();
+                context.Users.Remove(user);
+                await context.SaveChangesAsync();
                 return BadRequest("CRP already registered.");
             }
 
@@ -101,7 +80,7 @@ public class AuthController : ControllerBase
                 CRP = fullCrp,
                 UserId = user.Id
             };
-            _context.Psychologists.Add(psychologist);
+            context.Psychologists.Add(psychologist);
         }
         else if (request.UserType == UserType.Patient)
         {
@@ -110,10 +89,10 @@ public class AuthController : ControllerBase
                 UserId = user.Id,
                 PsychologistId = request.PsychologistId
             };
-            _context.Patients.Add(patient);
+            context.Patients.Add(patient);
         }
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return Ok("User registered successfully.");
     }
@@ -121,18 +100,12 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto request)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
-        if (user == null)
-        {
-            return BadRequest("User not found.");
-        }
+        var user = await context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+        if (user == null) return BadRequest("User not found.");
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-        {
-            return BadRequest("Wrong password.");
-        }
+        if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash)) return BadRequest("Wrong password.");
 
-        string token = CreateToken(user);
+        var token = CreateToken(user);
 
         return Ok(new { token, userType = (int)user.UserType });
     }
@@ -140,19 +113,16 @@ public class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordDto request)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Email);
-        if (user == null)
-        {
-            return Ok("If the email exists, you will receive instructions.");
-        }
+        var user = await context.Users.FirstOrDefaultAsync(u => u.Username == request.Email);
+        if (user == null) return Ok("If the email exists, you will receive instructions.");
 
         user.ResetToken = CreateRandomToken();
         user.ResetTokenExpires = DateTime.Now.AddDays(1);
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
-        try 
+        try
         {
-            await _emailService.SendEmailAsync(user.Username, "Recuperação de Senha - Reframe", 
+            await emailService.SendEmailAsync(user.Username, "Recuperação de Senha - Reframe",
                 $"Seu token de recuperação é: {user.ResetToken}");
         }
         catch (Exception ex)
@@ -166,17 +136,14 @@ public class AuthController : ControllerBase
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword(ResetPasswordDto request)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.ResetToken == request.Token);
-        if (user == null || user.ResetTokenExpires < DateTime.Now)
-        {
-            return BadRequest("Invalid Token.");
-        }
+        var user = await context.Users.FirstOrDefaultAsync(u => u.ResetToken == request.Token);
+        if (user == null || user.ResetTokenExpires < DateTime.Now) return BadRequest("Invalid Token.");
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         user.ResetToken = null;
         user.ResetTokenExpires = null;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return Ok("Password successfully reset.");
     }
@@ -188,14 +155,14 @@ public class AuthController : ControllerBase
 
     private string CreateToken(User user)
     {
-        List<Claim> claims = new List<Claim>
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Role, user.UserType.ToString()),
-            new Claim("UserId", user.Id.ToString())
+            new(ClaimTypes.Name, user.Username),
+            new(ClaimTypes.Role, user.UserType.ToString()),
+            new("UserId", user.Id.ToString())
         };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("Jwt:Key").Value!));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration.GetSection("Jwt:Key").Value!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
         var token = new JwtSecurityToken(

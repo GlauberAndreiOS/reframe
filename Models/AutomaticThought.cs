@@ -6,9 +6,9 @@ namespace reframe.Models;
 public class AutomaticThought
 {
     public Guid Id { get; set; }
-    
+
     public DateTime Date { get; set; } = DateTime.Now;
-    
+
     public string Situation { get; set; } = string.Empty;
     public string Thought { get; set; } = string.Empty;
     public string Emotion { get; set; } = string.Empty;
@@ -19,9 +19,8 @@ public class AutomaticThought
     public string Reevaluation { get; set; } = string.Empty;
 
     public Guid PatientId { get; set; }
-    [ForeignKey("PatientId")]
-    [JsonIgnore]
-    public Patient? Patient { get; set; }
-    
+
+    [ForeignKey("PatientId")] [JsonIgnore] public Patient? Patient { get; set; }
+
     public DateTime? DeletedAt { get; set; }
 }

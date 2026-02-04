@@ -1,27 +1,27 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
-	TouchableOpacity,
-	StyleSheet,
-	ScrollView,
 	ActivityIndicator,
 	KeyboardAvoidingView,
 	Platform,
+	ScrollView,
+	StyleSheet,
+	TouchableOpacity,
 	View
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { GlassInput } from '@/components/ui/glass-input';
-import { useToast } from '@/context/ToastContext';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
-import { thoughtsRepository } from '@/database/repositories/thoughts.repository';
+import {Stack, useRouter} from 'expo-router';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {ThemedView} from '@/components/themed-view';
+import {ThemedText} from '@/components/themed-text';
+import {GlassInput} from '@/components/ui/glass-input';
+import {useToast} from '@/context/ToastContext';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {Colors} from '@/constants/theme';
+import {thoughtsRepository} from '@/database/repositories/thoughts.repository';
 
 export default function NewThoughtScreen() {
 	const router = useRouter();
-	const { showToast } = useToast();
+	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 
 	const tintColor = useThemeColor({}, 'tint');
@@ -57,7 +57,7 @@ export default function NewThoughtScreen() {
 				alternativeThoughts: alternativeThoughts || '',
 				reevaluation: reevaluation || '',
 			});
-			
+
 			showToast('Pensamento salvo com sucesso!', 'success');
 			setTimeout(() => router.back(), 500);
 		} catch (error) {
@@ -73,7 +73,7 @@ export default function NewThoughtScreen() {
 				options={{
 					title: 'Novo Registro',
 					headerBackTitle: 'Voltar',
-					headerStyle: { backgroundColor },
+					headerStyle: {backgroundColor},
 					headerShadowVisible: false,
 					headerTintColor: tintColor,
 				}}
@@ -92,7 +92,8 @@ export default function NewThoughtScreen() {
 					<AnimatedEntry style={{flex: 1}}>
 						<View>
 							<View style={styles.section}>
-								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE ACONTECEU?</ThemedText>
+								<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>O QUE
+									ACONTECEU?</ThemedText>
 								<GlassInput
 									placeholder="Situação (Onde? Quando? Com quem?)"
 									value={situation}
@@ -103,7 +104,8 @@ export default function NewThoughtScreen() {
 							</View>
 
 							<View style={styles.section}>
-								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE PASSOU PELA SUA CABEÇA?</ThemedText>
+								<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>O QUE PASSOU PELA SUA
+									CABEÇA?</ThemedText>
 								<GlassInput
 									placeholder="Pensamento Automático"
 									value={thought}
@@ -114,7 +116,8 @@ export default function NewThoughtScreen() {
 							</View>
 
 							<View style={styles.section}>
-								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE VOCÊ SENTIU?</ThemedText>
+								<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>O QUE VOCÊ
+									SENTIU?</ThemedText>
 								<GlassInput
 									placeholder="Emoção (Tristeza, Raiva, Ansiedade...)"
 									value={emotion}
@@ -123,7 +126,8 @@ export default function NewThoughtScreen() {
 							</View>
 
 							<View style={styles.section}>
-								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>O QUE VOCÊ FEZ?</ThemedText>
+								<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>O QUE VOCÊ
+									FEZ?</ThemedText>
 								<GlassInput
 									placeholder="Comportamento / Reação"
 									value={behavior}
@@ -134,8 +138,8 @@ export default function NewThoughtScreen() {
 							</View>
 
 							<View style={styles.section}>
-								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>EVIDÊNCIAS</ThemedText>
-								<View style={{ gap: 12 }}>
+								<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>EVIDÊNCIAS</ThemedText>
+								<View style={{gap: 12}}>
 									<GlassInput
 										placeholder="Evidências a favor do pensamento"
 										value={evidencePro}
@@ -154,8 +158,9 @@ export default function NewThoughtScreen() {
 							</View>
 
 							<View style={styles.section}>
-								<ThemedText style={[styles.sectionTitle, { color: mutedColor }]}>REESTRUTURAÇÃO</ThemedText>
-								<View style={{ gap: 12 }}>
+								<ThemedText
+									style={[styles.sectionTitle, {color: mutedColor}]}>REESTRUTURAÇÃO</ThemedText>
+								<View style={{gap: 12}}>
 									<GlassInput
 										placeholder="Pensamentos Alternativos"
 										value={alternativeThoughts}
@@ -173,18 +178,18 @@ export default function NewThoughtScreen() {
 								</View>
 							</View>
 						</View>
-						
+
 						<TouchableOpacity
 							style={[
 								styles.button,
-								{ backgroundColor: tintColor },
+								{backgroundColor: tintColor},
 								loading && styles.buttonDisabled,
 							]}
 							onPress={handleSave}
 							disabled={loading}
 						>
 							{loading ? (
-								<ActivityIndicator color="#FFF" />
+								<ActivityIndicator color="#FFF"/>
 							) : (
 								<ThemedText style={styles.buttonText}>
 									SALVAR REGISTRO

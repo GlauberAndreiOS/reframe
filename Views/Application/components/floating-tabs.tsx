@@ -1,21 +1,16 @@
 import React from 'react';
-import {
-	View,
-	TouchableOpacity,
-	StyleSheet,
-	Platform
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import {Platform, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useColorScheme} from '@/hooks/use-color-scheme';
 
 interface Props {
-	state: any;
-	descriptors: any;
-	navigation: any;
+    state: any;
+    descriptors: any;
+    navigation: any;
 }
 
-export default function FloatingTabs({ state, descriptors, navigation }: Props) {
+export default function FloatingTabs({state, descriptors, navigation}: Props) {
 	const insets = useSafeAreaInsets();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
@@ -36,7 +31,7 @@ export default function FloatingTabs({ state, descriptors, navigation }: Props) 
 			]}
 		>
 			{state.routes.map((route: any, index: number) => {
-				const { options } = descriptors[route.key];
+				const {options} = descriptors[route.key];
 				const focused = state.index === index;
 
 				const onPress = () => {

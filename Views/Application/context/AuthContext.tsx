@@ -1,30 +1,26 @@
-import React, {
-	createContext,
-	useContext,
-	useEffect,
-	useState,
-	ReactNode,
-} from 'react';
+import React, {createContext, ReactNode, useCallback, useContext, useEffect, useState,} from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { useRouter, useSegments } from 'expo-router';
-import { useInternetStatus } from '@/hooks/use-internal-status';
-import { registerUnauthorizedHandler } from "@/services/api";
+import {useRouter, useSegments} from 'expo-router';
+import {useInternetStatus} from '@/hooks/use-internal-status';
+import {registerUnauthorizedHandler} from "@/services/api";
 
 interface AuthState {
-	token: string | null;
-	userType: number | null;
+    token: string | null;
+    userType: number | null;
 }
 
 interface AuthContextType extends AuthState {
-	signIn: (token: string, userType: number, email?: string) => Promise<void>;
-	signOut: () => Promise<void>;
+    signIn: (token: string, userType: number, email?: string) => Promise<void>;
+    signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
 	token: null,
 	userType: null,
-	signIn: async () => {},
-	signOut: async () => {},
+	signIn: async () => {
+	},
+	signOut: async () => {
+	},
 });
 
 export function useAuth() {
@@ -32,11 +28,11 @@ export function useAuth() {
 }
 
 interface AuthProviderProps {
-	children: ReactNode;
-	initialAuth?: AuthState;
+    children: ReactNode;
+    initialAuth?: AuthState;
 }
 
-export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
+export function AuthProvider({children, initialAuth}: AuthProviderProps) {
 	const [auth, setAuth] = useState<AuthState>(initialAuth || {
 		token: null,
 		userType: null,
@@ -45,12 +41,12 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 	const router = useRouter();
 	const segments = useSegments();
 	const isConnected = useInternetStatus();
-	
+
 	useEffect(() => {
-		// @ts-ignore
+
 		if (segments.length === 0) return;
 
-		// @ts-ignore
+
 		const inAuthGroup = segments[0] === '(auth)';
 
 		if (!auth.token) {
@@ -62,15 +58,15 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 
 		if (isConnected && inAuthGroup) {
 			if (auth.userType === 0) {
-				// @ts-ignore
+
 				router.replace('/(psychologist)');
 			} else if (auth.userType === 1) {
-				// @ts-ignore
+
 				router.replace('/(patient)');
 			}
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [auth, segments, isConnected]);
+
+	}, [auth, segments, isConnected, router]);
 
 	const signIn = async (token: string, userType: number, email?: string) => {
 		const promises = [
@@ -79,7 +75,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 		];
 
 		if (email) {
-			let env = 'Prod'; // Default
+			let env = 'Prod';
 			const lower = email.toLowerCase();
 			if (lower.includes('@reframe.gandrei.dev.br')) env = 'Dev';
 			if (lower.includes('@reframe-homolog.gandrei.dev.br')) env = 'Homolog';
@@ -94,7 +90,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 		});
 	};
 
-	const signOut = async () => {
+	const signOut = useCallback(async () => {
 		await Promise.all([
 			SecureStore.deleteItemAsync('token'),
 			SecureStore.deleteItemAsync('userType'),
@@ -107,7 +103,7 @@ export function AuthProvider({ children, initialAuth }: AuthProviderProps) {
 		});
 
 		router.replace('/(auth)/login');
-	};
+	}, [router]);
 
 	useEffect(() => {
 		registerUnauthorizedHandler(signOut);

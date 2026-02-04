@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import {StyleSheet, Text, View} from 'react-native';
+import {useThemeColor} from '@/hooks/use-theme-color';
 
 export function ReframeLogo() {
 	const textColor = useThemeColor({}, 'text');
@@ -9,10 +9,10 @@ export function ReframeLogo() {
 	return (
 		<View style={styles.container}>
 			<View style={styles.logoContainer}>
-				<Text style={[styles.logoText, { color: textColor }]}>REFRAME</Text>
+				<Text style={[styles.logoText, {color: textColor}]}>REFRAME</Text>
 			</View>
-      
-			<Text style={[styles.slogan, { color: mutedColor }]}>
+
+			<Text style={[styles.slogan, {color: mutedColor}]}>
 				Reestruturação de pensamentos, transformação de perspectivas
 			</Text>
 		</View>

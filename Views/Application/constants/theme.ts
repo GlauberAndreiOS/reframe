@@ -1,21 +1,22 @@
 export const Colors = {
 	light: {
-		
+
 		text: '#11181C',
 		background: '#FFFFFF',
 
-		
+
 		card: '#F5F7FA',
 		border: '#E0E4E8',
 		muted: '#6B7280',
+		surface: '#F5F7FA',
 
-		
-		primary: '#1A237E',   // Azul profundo
-		secondary: '#0277BD', // Azul oceano
-		accent: '#8BC34A',    // Verde reframe
-		danger: '#B91C1C',    // Vermelho perigo
 
-		
+		primary: '#1A237E',
+		secondary: '#0277BD',
+		accent: '#8BC34A',
+		danger: '#B91C1C',
+
+
 		tint: '#0277BD',
 		icon: '#687076',
 
@@ -24,22 +25,23 @@ export const Colors = {
 	},
 
 	dark: {
-		
+
 		text: '#ECEDEE',
 		background: '#151718',
 
-		
+
 		card: '#1E2226',
 		border: '#2A2F34',
 		muted: '#9BA1A6',
+		surface: '#1E2226',
 
-		
-		primary: '#7986CB',   // Azul profundo suavizado
-		secondary: '#4FC3F7', // Azul oceano claro
-		accent: '#AED581',    // Verde esperança
-		danger: '#F87171',    // Vermelho perigo claro
 
-		
+		primary: '#7986CB',
+		secondary: '#4FC3F7',
+		accent: '#AED581',
+		danger: '#F87171',
+
+
 		tint: '#4FC3F7',
 		icon: '#9BA1A6',
 

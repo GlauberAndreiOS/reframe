@@ -1,26 +1,21 @@
-import React, { useCallback, useState } from 'react';
-import {
-	View,
-	StyleSheet,
-	FlatList,
-	TouchableOpacity,
-	RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { useThoughts } from '@/hooks/(patient)/thoughts.hooks';
-import { useToast } from '@/context/ToastContext';
-import { ConfirmModal } from '@/components/ui/confirm-modal';
+import React, {useCallback, useState} from 'react';
+import {FlatList, RefreshControl, StyleSheet, TouchableOpacity, View,} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useFocusEffect, useRouter} from 'expo-router';
+import {IconSymbol} from '@/components/ui/icon-symbol';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {ThemedView} from '@/components/themed-view';
+import {ThemedText} from '@/components/themed-text';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {useThoughts} from '@/hooks/(patient)/thoughts.hooks';
+import {useToast} from '@/context/ToastContext';
+import {ConfirmModal} from '@/components/ui/confirm-modal';
+import {AmbientBackground} from '@/components/ui/ambient-background';
 
 export default function ThoughtsScreen() {
 	const router = useRouter();
-	const { showToast } = useToast();
+	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
@@ -30,7 +25,7 @@ export default function ThoughtsScreen() {
 	const mutedColor = useThemeColor({}, 'muted');
 	const dangerColor = useThemeColor({}, 'danger');
 
-	const { data: thoughts, isSyncing, hasFailedSync, syncWithBackend, deleteThought } = useThoughts();
+	const {data: thoughts, isSyncing, hasFailedSync, syncWithBackend, deleteThought} = useThoughts();
 
 	const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 	const [thoughtToDelete, setThoughtToDelete] = useState<string | null>(null);
@@ -38,6 +33,7 @@ export default function ThoughtsScreen() {
 	useFocusEffect(
 		useCallback(() => {
 			void syncWithBackend();
+			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, [])
 	);
 
@@ -68,16 +64,20 @@ export default function ThoughtsScreen() {
 
 	const formatDate = (dateString: string) => {
 		const date = new Date(dateString);
-		return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+		return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', {
+			hour: '2-digit',
+			minute: '2-digit'
+		})}`;
 	};
 
 	return (
 		<ThemedView style={styles.container}>
+			<AmbientBackground/>
 			<SafeAreaView style={styles.safeArea}>
 				<View style={styles.header}>
 					<View>
 						<ThemedText type="title">Meus Pensamentos</ThemedText>
-						<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
+						<ThemedText style={{color: mutedColor, fontSize: 14}}>
 							Registro diário de emoções
 						</ThemedText>
 					</View>
@@ -123,100 +123,107 @@ export default function ThoughtsScreen() {
 					}
 					ListEmptyComponent={
 						<View style={styles.center}>
-							<IconSymbol name="doc.text" size={48} color={mutedColor} />
-							<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+							<IconSymbol name="doc.text" size={48} color={mutedColor}/>
+							<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
 								Nenhum pensamento registrado ainda.
 							</ThemedText>
-							<TouchableOpacity 
+							<TouchableOpacity
 								onPress={() => router.push('/(patient)/new-thought')}
-								style={{ marginTop: 20 }}
+								style={{marginTop: 20}}
 							>
-								<ThemedText style={{ color: tintColor, fontWeight: '600' }}>
+								<ThemedText style={{color: tintColor, fontWeight: '600'}}>
 									Registrar meu primeiro pensamento
 								</ThemedText>
 							</TouchableOpacity>
 						</View>
 					}
-					renderItem={({ item, index }) => (
+					renderItem={({item, index}) => (
 						<AnimatedEntry delay={index * 100} duration={600}>
 							<View style={[
-								styles.card, 
-								{ 
+								styles.card,
+								{
 									backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-									borderColor: borderColor 
+									borderColor: borderColor
 								}
 							]}>
 								<View style={styles.cardHeader}>
-									<ThemedText style={[styles.date, { color: mutedColor }]}>
+									<ThemedText style={[styles.date, {color: mutedColor}]}>
 										{formatDate(item.date)}
 									</ThemedText>
 									<View style={{flexDirection: 'row', alignItems: 'center'}}>
 										{item.synced === 0 && (
-											<IconSymbol name="cloud.fill" size={16} color={mutedColor} style={{ marginRight: 8 }} />
+											<IconSymbol name="cloud.fill" size={16} color={mutedColor}
+												style={{marginRight: 8}}/>
 										)}
 										{item.synced === -1 && (
-											<IconSymbol name="exclamationmark.triangle.fill" size={16} color={dangerColor} style={{ marginRight: 8 }} />
+											<IconSymbol name="exclamationmark.triangle.fill" size={16}
+												color={dangerColor} style={{marginRight: 8}}/>
 										)}
 									</View>
 								</View>
 
-								<View style={{ marginBottom: 16, flexDirection: 'row' }}>
-									<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
-										<ThemedText style={[styles.emotion, { color: tintColor }]}>
+								<View style={{marginBottom: 16, flexDirection: 'row'}}>
+									<View style={[styles.emotionBadge, {backgroundColor: tintColor + '20'}]}>
+										<ThemedText style={[styles.emotion, {color: tintColor}]}>
 											{item.emotion}
 										</ThemedText>
 									</View>
 								</View>
 
 								<View style={styles.section}>
-									<ThemedText style={[styles.label, { color: mutedColor }]}>SITUAÇÃO</ThemedText>
+									<ThemedText style={[styles.label, {color: mutedColor}]}>SITUAÇÃO</ThemedText>
 									<ThemedText style={styles.content}>{item.situation}</ThemedText>
 								</View>
 
 								<View style={styles.section}>
-									<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTO</ThemedText>
+									<ThemedText style={[styles.label, {color: mutedColor}]}>PENSAMENTO</ThemedText>
 									<ThemedText style={styles.content}>{item.thought}</ThemedText>
 								</View>
 
 								{!!item.behavior && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>COMPORTAMENTO</ThemedText>
+										<ThemedText
+											style={[styles.label, {color: mutedColor}]}>COMPORTAMENTO</ThemedText>
 										<ThemedText style={styles.content}>{item.behavior}</ThemedText>
 									</View>
 								)}
 
 								{!!item.evidencePro && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS A FAVOR</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>EVIDÊNCIAS A
+											FAVOR</ThemedText>
 										<ThemedText style={styles.content}>{item.evidencePro}</ThemedText>
 									</View>
 								)}
 
 								{!!item.evidenceContra && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS CONTRA</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>EVIDÊNCIAS
+											CONTRA</ThemedText>
 										<ThemedText style={styles.content}>{item.evidenceContra}</ThemedText>
 									</View>
 								)}
 
 								{!!item.alternativeThoughts && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTOS ALTERNATIVOS</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>PENSAMENTOS
+											ALTERNATIVOS</ThemedText>
 										<ThemedText style={styles.content}>{item.alternativeThoughts}</ThemedText>
 									</View>
 								)}
 
 								{!!item.reevaluation && (
 									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>REAVALIAÇÃO</ThemedText>
+										<ThemedText style={[styles.label, {color: mutedColor}]}>REAVALIAÇÃO</ThemedText>
 										<ThemedText style={styles.content}>{item.reevaluation}</ThemedText>
 									</View>
 								)}
-								
+
 								<View style={styles.cardFooter}>
 									<TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
-										<IconSymbol name="trash" size={18} color={dangerColor} />
-										<ThemedText style={[styles.deleteButtonText, { color: dangerColor }]}>Excluir</ThemedText>
+										<IconSymbol name="trash" size={18} color={dangerColor}/>
+										<ThemedText
+											style={[styles.deleteButtonText, {color: dangerColor}]}>Excluir</ThemedText>
 									</TouchableOpacity>
 								</View>
 							</View>
@@ -276,7 +283,7 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		alignItems: 'center',
-		marginBottom: 12, // Reduzi um pouco o margin bottom aqui
+		marginBottom: 12,
 		gap: 8,
 	},
 	date: {
@@ -318,7 +325,7 @@ const styles = StyleSheet.create({
 		marginTop: 16,
 		paddingTop: 16,
 		borderTopWidth: 1,
-		borderColor: '#E5E5E5', // Use a border color from your theme
+		borderColor: '#E5E5E5',
 		flexDirection: 'row',
 		justifyContent: 'flex-end',
 	},

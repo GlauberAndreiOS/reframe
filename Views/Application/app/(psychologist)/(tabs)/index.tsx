@@ -1,27 +1,30 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, View } from 'react-native';
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from 'expo-router';
+import React, {useCallback, useState} from 'react';
+import {ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {SafeAreaView} from "react-native-safe-area-context";
+import {useFocusEffect, useRouter} from 'expo-router';
 import api from '@/services/api';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useToast } from '@/context/ToastContext';
-import { useConfirm } from '@/context/ConfirmContext';
-import { PsychologistPickerModal } from '@/components/ui/psychologist-picker-modal';
+import {ThemedText} from '@/components/themed-text';
+import {ThemedView} from '@/components/themed-view';
+import {useThemeColor} from '@/hooks/use-theme-color';
+import {useColorScheme} from '@/hooks/use-color-scheme';
+import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {IconSymbol} from '@/components/ui/icon-symbol';
+import {useToast} from '@/context/ToastContext';
+import {useConfirm} from '@/context/ConfirmContext';
+import {PsychologistPickerModal} from '@/components/ui/psychologist-picker-modal';
+import {AmbientBackground} from '@/components/ui/ambient-background';
+import {Avatar} from '@/components/ui/avatar';
 
 interface Patient {
     id: number;
     name: string;
+    profilePictureUrl?: string;
 }
 
 export default function PatientsScreen() {
 	const router = useRouter();
-	const { showToast } = useToast();
-	const { confirm } = useConfirm();
+	const {showToast} = useToast();
+	const {confirm} = useConfirm();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
@@ -32,8 +35,8 @@ export default function PatientsScreen() {
 
 	const [patients, setPatients] = useState<Patient[]>([]);
 	const [loading, setLoading] = useState(true);
-	
-	// Transfer Logic
+
+
 	const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
 	const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
@@ -97,17 +100,18 @@ export default function PatientsScreen() {
 
 	return (
 		<ThemedView style={styles.container}>
+			<AmbientBackground/>
 			<SafeAreaView style={styles.safeArea}>
 				<View style={styles.header}>
 					<ThemedText type="title">Meus Pacientes</ThemedText>
-					<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
+					<ThemedText style={{color: mutedColor, fontSize: 14}}>
 						Acompanhamento clínico
 					</ThemedText>
 				</View>
-				
+
 				{loading ? (
 					<View style={styles.center}>
-						<ActivityIndicator size="large" color={tintColor} />
+						<ActivityIndicator size="large" color={tintColor}/>
 					</View>
 				) : (
 					<FlatList
@@ -117,57 +121,68 @@ export default function PatientsScreen() {
 						showsVerticalScrollIndicator={false}
 						ListEmptyComponent={
 							<View style={styles.center}>
-								<IconSymbol name="person.2" size={48} color={mutedColor} />
-								<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+								<IconSymbol name="person.2" size={48} color={mutedColor}/>
+								<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
 									Nenhum paciente vinculado.
 								</ThemedText>
 							</View>
 						}
-						renderItem={({ item, index }) => (
+						renderItem={({item, index}) => (
 							<AnimatedEntry delay={index * 100} duration={600}>
-								<View 
+								<View
 									style={[
-										styles.card, 
-										{ 
+										styles.card,
+										{
 											backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-											borderColor: borderColor 
+											borderColor: borderColor
 										}
 									]}
 								>
 									<View style={styles.cardContent}>
-										<View style={[styles.avatar, { backgroundColor: tintColor + '20' }]}>
-											<IconSymbol name="person.fill" size={24} color={tintColor} />
+										<View style={{marginRight: 16}}>
+											<Avatar 
+												uri={item.profilePictureUrl} 
+												size={56} 
+												editable={false}
+												name={item.name}
+											/>
 										</View>
 										<ThemedText numberOfLines={1} style={styles.name}>{item.name}</ThemedText>
 									</View>
 
-									<View style={[styles.actions, { borderTopColor: borderColor + '33' }]}>
-										<TouchableOpacity 
+									<View style={[styles.actions, {borderTopColor: borderColor + '33'}]}>
+										<TouchableOpacity
 											style={styles.actionButton}
-											onPress={() => router.push({ pathname: '/(psychologist)/patient/[id]', params: { id: item.id, name: item.name } })}
+											onPress={() => router.push({
+												pathname: '/(psychologist)/patient/[id]',
+												params: {id: item.id, name: item.name}
+											})}
 										>
-											<IconSymbol name="doc.text.fill" size={20} color={tintColor} />
-											<ThemedText style={[styles.actionText, { color: tintColor }]}>Registros</ThemedText>
+											<IconSymbol name="doc.text.fill" size={20} color={tintColor}/>
+											<ThemedText
+												style={[styles.actionText, {color: tintColor}]}>Registros</ThemedText>
 										</TouchableOpacity>
 
-										<View style={[styles.verticalDivider, { backgroundColor: borderColor }]} />
+										<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
 
-										<TouchableOpacity 
+										<TouchableOpacity
 											style={styles.actionButton}
 											onPress={() => openTransferModal(item.id)}
 										>
-											<IconSymbol name="arrow.2.squarepath" size={20} color={mutedColor} />
-											<ThemedText style={[styles.actionText, { color: mutedColor }]}>Transferir</ThemedText>
+											<IconSymbol name="arrow.2.squarepath" size={20} color={mutedColor}/>
+											<ThemedText
+												style={[styles.actionText, {color: mutedColor}]}>Transferir</ThemedText>
 										</TouchableOpacity>
-										
-										<View style={[styles.verticalDivider, { backgroundColor: borderColor }]} />
 
-										<TouchableOpacity 
+										<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
+
+										<TouchableOpacity
 											style={styles.actionButton}
 											onPress={() => handleUnlink(item.id, item.name)}
 										>
-											<IconSymbol name="person.slash.fill" size={20} color="#EF4444" />
-											<ThemedText style={[styles.actionText, { color: '#EF4444' }]}>Desvincular</ThemedText>
+											<IconSymbol name="person.slash.fill" size={20} color="#EF4444"/>
+											<ThemedText
+												style={[styles.actionText, {color: '#EF4444'}]}>Desvincular</ThemedText>
 										</TouchableOpacity>
 									</View>
 								</View>
@@ -219,14 +234,6 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		padding: 20,
-		gap: 16,
-	},
-	avatar: {
-		width: 56,
-		height: 56,
-		borderRadius: 28,
-		justifyContent: 'center',
-		alignItems: 'center',
 	},
 	name: {
 		fontSize: 18,
