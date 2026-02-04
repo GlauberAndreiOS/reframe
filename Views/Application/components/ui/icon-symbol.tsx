@@ -29,6 +29,9 @@ const MAPPING = {
 	'doc.on.doc': 'file-copy',
 	'plus.circle': 'add-circle-outline',
 	'edit': 'edit',
+	'check-box': 'check-box',
+	'check-box-outline-blank': 'check-box-outline-blank',
+	'close': 'close',
 } as Partial<Record<string, ComponentProps<typeof MaterialIcons>['name']>>;
 
 export type IconSymbolName = keyof typeof MAPPING;

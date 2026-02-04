@@ -22,13 +22,13 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
             .Include(p => p.User)
             .FirstOrDefaultAsync(p => p.UserId == userId);
         if (psychologist == null) return BadRequest("Psychologist profile not found.");
-
-        var questionnaire = new Questionnaire
+        
+        var masterQuestionnaire = new Questionnaire
         {
             Id = Guid.NewGuid(),
             Title = dto.Title,
             PsychologistId = psychologist.Id,
-            TargetPatientId = dto.TargetPatientId,
+            TargetPatientId = null,
             Questions = dto.Questions.Select(q => new Question
             {
                 Title = q.Title,
@@ -39,17 +39,17 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
             CreatedAt = DateTime.UtcNow
         };
 
-        context.Questionnaires.Add(questionnaire);
-
-        if (questionnaire.IsShared)
+        context.Questionnaires.Add(masterQuestionnaire);
+        
+        if (masterQuestionnaire.IsShared)
         {
             var template = new QuestionnaireTemplate
             {
                 Id = Guid.NewGuid(),
-                Title = questionnaire.Title,
+                Title = masterQuestionnaire.Title,
                 Description = "Shared by a user.",
                 Category = "User Shared",
-                Questions = questionnaire.Questions,
+                Questions = masterQuestionnaire.Questions,
                 IsGlobal = false,
                 OriginalPsychologistId = psychologist.Id,
                 CreatedAt = DateTime.UtcNow
@@ -57,9 +57,37 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
             context.QuestionnaireTemplates.Add(template);
         }
         
+        if (dto.TargetPatientIds != null && dto.TargetPatientIds.Any())
+        {
+            foreach (var patientId in dto.TargetPatientIds)
+            {
+                var isPatientLinked = await context.Patients.AnyAsync(p => p.Id == patientId && p.PsychologistId == psychologist.Id);
+                if (!isPatientLinked) continue; 
+
+                var patientQuestionnaire = new Questionnaire
+                {
+                    Id = Guid.NewGuid(),
+                    Title = masterQuestionnaire.Title,
+                    PsychologistId = psychologist.Id,
+                    TargetPatientId = patientId,
+                    Questions = masterQuestionnaire.Questions,
+                    IsShared = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                patientQuestionnaire.Questions = masterQuestionnaire.Questions.Select(q => new Question
+                {
+                    Title = q.Title,
+                    Type = q.Type,
+                    Data = q.Data != null ? new List<string>(q.Data) : null
+                }).ToList();
+
+                context.Questionnaires.Add(patientQuestionnaire);
+            }
+        }
+        
         await context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetQuestionnaire), new { id = questionnaire.Id }, questionnaire);
+        return CreatedAtAction(nameof(GetQuestionnaire), new { id = masterQuestionnaire.Id }, masterQuestionnaire);
     }
     
     [HttpGet]
@@ -81,7 +109,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
                 var questionnaires = await context.Questionnaires
                     .Include(q => q.TargetPatient)
                     .ThenInclude(p => p.User)
-                    .Where(q => q.PsychologistId == psychologist.Id && q.TargetPatientId == null) // Only show templates/master copies
+                    .Where(q => q.PsychologistId == psychologist.Id && q.TargetPatientId == null)
                     .OrderByDescending(q => q.CreatedAt)
                     .ToListAsync();
 
@@ -190,7 +218,6 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
 
         context.Entry(questionnaire).State = EntityState.Modified;
         
-        // Handle shared template logic
         var existingTemplate = await context.QuestionnaireTemplates.FirstOrDefaultAsync(t => t.OriginalPsychologistId == psychologist.Id && t.Title == questionnaire.Title);
         if (questionnaire.IsShared)
         {
@@ -413,7 +440,6 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
         if (questionnaire == null) return NotFound();
         if (questionnaire.PsychologistId != psychologist.Id) return Forbid();
 
-        // Find all questionnaires that are "copies" of this one (same title, same psychologist, but assigned to a patient)
         var assignedQuestionnaires = await context.Questionnaires
             .Where(q => q.PsychologistId == psychologist.Id && q.Title == questionnaire.Title && q.TargetPatientId != null)
             .ToListAsync();
@@ -470,7 +496,6 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
         if (masterQuestionnaire == null) return NotFound();
         if (masterQuestionnaire.PsychologistId != psychologist.Id) return Forbid();
 
-        // Check if already applied
         var existing = await context.Questionnaires
             .FirstOrDefaultAsync(q => q.PsychologistId == psychologist.Id && q.TargetPatientId == patientId && q.Title == masterQuestionnaire.Title);
             
@@ -479,10 +504,10 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
         var newQuestionnaire = new Questionnaire
         {
             Id = Guid.NewGuid(),
-            Title = masterQuestionnaire.Title, // Keep same title to group them logically
+            Title = masterQuestionnaire.Title,
             PsychologistId = psychologist.Id,
             TargetPatientId = patientId,
-            Questions = masterQuestionnaire.Questions, // Copy questions
+            Questions = masterQuestionnaire.Questions,
             IsShared = false,
             CreatedAt = DateTime.UtcNow
         };

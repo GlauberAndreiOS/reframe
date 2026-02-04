@@ -11,7 +11,6 @@ import {IconSymbol} from '@/components/ui/icon-symbol';
 import {useThemeColor} from '@/hooks/use-theme-color';
 import {AmbientBackground} from '@/components/ui/ambient-background';
 import {Toast, ToastType} from '@/components/ui/toast';
-import {Picker} from '@react-native-picker/picker';
 
 interface Question {
     title: string;
@@ -21,9 +20,7 @@ interface Question {
 
 interface Patient {
     id: string;
-    user: {
-        name: string;
-    };
+    name: string;
 }
 
 export default function NewQuestionnaireScreen() {
@@ -32,16 +29,19 @@ export default function NewQuestionnaireScreen() {
 	const [title, setTitle] = useState('');
 	const [questions, setQuestions] = useState<Question[]>([]);
 	const [isShared, setIsShared] = useState(false);
-	const [targetPatientId, setTargetPatientId] = useState<string | null>(null);
+	const [selectedPatients, setSelectedPatients] = useState<string[]>([]);
 	const [patients, setPatients] = useState<Patient[]>([]);
+	const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
+	const [searchQuery, setSearchQuery] = useState('');
 	const [toast, setToast] = useState<{message: string, type: ToastType} | null>(null);
+	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
 	const primaryColor = useThemeColor({}, 'tint');
 	const textColor = useThemeColor({}, 'text');
 	const surfaceColor = useThemeColor({}, 'surface');
 	const errorColor = '#EF4444';
-
-
+	const warningColor = '#F59E0B';
+	
 	const [modalVisible, setModalVisible] = useState(false);
 	const [newQuestionTitle, setNewQuestionTitle] = useState('');
 	const [newQuestionType, setNewQuestionType] = useState<'text' | 'select' | 'radio' | 'checkbox'>('text');
@@ -70,7 +70,21 @@ export default function NewQuestionnaireScreen() {
 		void fetchPatients();
 	}, [token]);
 
-	const handleAddQuestion = () => {
+	useEffect(() => {
+		if (searchQuery.trim() === '') {
+			setFilteredPatients([]);
+		} else {
+			const lowerCaseQuery = searchQuery.toLowerCase();
+			setFilteredPatients(
+				patients.filter(p =>
+					p.name?.toLowerCase().includes(lowerCaseQuery) &&
+					!selectedPatients.includes(p.id)
+				)
+			);
+		}
+	}, [searchQuery, patients, selectedPatients]);
+
+	const handleAddOrUpdateQuestion = () => {
 		if (!newQuestionTitle.trim()) {
 			setToast({message: 'O título da pergunta é obrigatório.', type: 'error'});
 			return;
@@ -85,17 +99,46 @@ export default function NewQuestionnaireScreen() {
 			return;
 		}
 
-		setQuestions([...questions, {
+		const questionData: Question = {
 			title: newQuestionTitle,
 			type: newQuestionType,
 			data: options
-		}]);
+		};
 
+		if (editingIndex !== null) {
+			const updatedQuestions = [...questions];
+			updatedQuestions[editingIndex] = questionData;
+			setQuestions(updatedQuestions);
+		} else {
+			setQuestions([...questions, questionData]);
+		}
 
+		closeModal();
+	};
+
+	const openEditModal = (index: number) => {
+		const q = questions[index];
+		setNewQuestionTitle(q.title);
+		setNewQuestionType(q.type as any);
+		setNewQuestionOptions(q.data ? q.data.join(', ') : '');
+		setEditingIndex(index);
+		setModalVisible(true);
+	};
+
+	const openAddModal = () => {
 		setNewQuestionTitle('');
 		setNewQuestionType('text');
 		setNewQuestionOptions('');
+		setEditingIndex(null);
+		setModalVisible(true);
+	};
+
+	const closeModal = () => {
 		setModalVisible(false);
+		setEditingIndex(null);
+		setNewQuestionTitle('');
+		setNewQuestionType('text');
+		setNewQuestionOptions('');
 	};
 
 	const handleSave = async () => {
@@ -113,7 +156,7 @@ export default function NewQuestionnaireScreen() {
 				title,
 				questions,
 				isShared,
-				targetPatientId: targetPatientId === 'all' ? null : targetPatientId
+				targetPatientIds: selectedPatients.length > 0 ? selectedPatients : null
 			}, {
 				headers: {Authorization: `Bearer ${token}`}
 			});
@@ -133,6 +176,17 @@ export default function NewQuestionnaireScreen() {
 		setQuestions(newQuestions);
 	};
 
+	const addPatient = (patientId: string) => {
+		if (!selectedPatients.includes(patientId)) {
+			setSelectedPatients([...selectedPatients, patientId]);
+			setSearchQuery('');
+		}
+	};
+
+	const removePatient = (patientId: string) => {
+		setSelectedPatients(selectedPatients.filter(id => id !== patientId));
+	};
+
 	return (
 		<ThemedView style={styles.container}>
 			{toast && <Toast message={toast.message} type={toast.type} />}
@@ -147,7 +201,7 @@ export default function NewQuestionnaireScreen() {
 				</TouchableOpacity>
 			</View>
 
-			<ScrollView style={styles.content}>
+			<ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
 				<ThemedText style={styles.label}>Título do Questionário</ThemedText>
 				<GlassInput
 					placeholder="Ex: Avaliação Inicial"
@@ -155,19 +209,41 @@ export default function NewQuestionnaireScreen() {
 					onChangeText={setTitle}
 				/>
 
-				<ThemedText style={styles.label}>Atribuir a Paciente (Opcional)</ThemedText>
-				<View style={[styles.pickerContainer, {borderColor: surfaceColor}]}>
-					<Picker
-						selectedValue={targetPatientId}
-						onValueChange={(itemValue) => setTargetPatientId(itemValue)}
-						style={{color: textColor}}
-						dropdownIconColor={textColor}
-					>
-						<Picker.Item label="Todos os pacientes (Público)" value="all" />
-						{patients.map((p) => (
-							<Picker.Item key={p.id} label={p.user?.name || 'Paciente sem nome'} value={p.id} />
-						))}
-					</Picker>
+				<ThemedText style={styles.label}>Deseja aplicar o questionário a alguém?</ThemedText>
+				
+				<View style={styles.selectedPatientsContainer}>
+					{selectedPatients.map(patientId => {
+						const patient = patients.find(p => p.id === patientId);
+						return (
+							<View key={patientId} style={[styles.selectedPatientChip, {backgroundColor: surfaceColor}]}>
+								<ThemedText style={styles.selectedPatientText}>{patient?.name || 'Paciente'}</ThemedText>
+								<TouchableOpacity onPress={() => removePatient(patientId)}>
+									<IconSymbol name="close" size={16} color={textColor} />
+								</TouchableOpacity>
+							</View>
+						);
+					})}
+				</View>
+
+				<View style={styles.autocompleteContainer}>
+					<GlassInput
+						placeholder="Buscar paciente..."
+						value={searchQuery}
+						onChangeText={setSearchQuery}
+					/>
+					{searchQuery.trim() !== '' && filteredPatients.length > 0 && (
+						<View style={[styles.suggestionsList, {backgroundColor: surfaceColor, borderColor: surfaceColor}]}>
+							{filteredPatients.map(patient => (
+								<TouchableOpacity
+									key={patient.id}
+									style={styles.suggestionItem}
+									onPress={() => addPatient(patient.id)}
+								>
+									<ThemedText>{patient?.name || ''}</ThemedText>
+								</TouchableOpacity>
+							))}
+						</View>
+					)}
 				</View>
 
 				<View style={styles.switchContainer}>
@@ -185,7 +261,7 @@ export default function NewQuestionnaireScreen() {
 
 				<View style={styles.questionsHeader}>
 					<ThemedText style={styles.label}>Perguntas</ThemedText>
-					<TouchableOpacity onPress={() => setModalVisible(true)}>
+					<TouchableOpacity onPress={openAddModal}>
 						<ThemedText style={{color: primaryColor, fontWeight: 'bold'}}>+ Adicionar</ThemedText>
 					</TouchableOpacity>
 				</View>
@@ -194,9 +270,22 @@ export default function NewQuestionnaireScreen() {
 					<Card key={index} style={styles.questionCard}>
 						<View style={styles.questionHeader}>
 							<ThemedText type="defaultSemiBold" style={{flex: 1}}>{index + 1}. {q.title}</ThemedText>
-							<TouchableOpacity onPress={() => removeQuestion(index)}>
-								<IconSymbol name="trash" size={20} color={errorColor}/>
-							</TouchableOpacity>
+							
+							<View style={styles.actionButtons}>
+								<TouchableOpacity 
+									style={[styles.iconButton, {backgroundColor: warningColor + '20'}]} 
+									onPress={() => openEditModal(index)}
+								>
+									<IconSymbol name="edit" size={18} color={warningColor}/>
+								</TouchableOpacity>
+								
+								<TouchableOpacity 
+									style={[styles.iconButton, {backgroundColor: errorColor + '20'}]} 
+									onPress={() => removeQuestion(index)}
+								>
+									<IconSymbol name="trash" size={18} color={errorColor}/>
+								</TouchableOpacity>
+							</View>
 						</View>
 						<ThemedText
 							style={{color: primaryColor, fontSize: 12, textTransform: 'uppercase', marginBottom: 4}}>
@@ -215,11 +304,13 @@ export default function NewQuestionnaireScreen() {
 				visible={modalVisible}
 				animationType="slide"
 				transparent={true}
-				onRequestClose={() => setModalVisible(false)}
+				onRequestClose={closeModal}
 			>
 				<View style={styles.modalContainer}>
 					<ThemedView style={styles.modalContent}>
-						<ThemedText type="subtitle" style={styles.modalTitle}>Nova Pergunta</ThemedText>
+						<ThemedText type="subtitle" style={styles.modalTitle}>
+							{editingIndex !== null ? 'Editar Pergunta' : 'Nova Pergunta'}
+						</ThemedText>
 
 						<ThemedText style={styles.label}>Pergunta</ThemedText>
 						<GlassInput
@@ -271,15 +362,17 @@ export default function NewQuestionnaireScreen() {
 						<View style={styles.modalButtons}>
 							<TouchableOpacity
 								style={[styles.modalButton, {borderColor: surfaceColor, borderWidth: 1}]}
-								onPress={() => setModalVisible(false)}
+								onPress={closeModal}
 							>
 								<ThemedText>Cancelar</ThemedText>
 							</TouchableOpacity>
 							<TouchableOpacity
 								style={[styles.modalButton, {backgroundColor: primaryColor}]}
-								onPress={handleAddQuestion}
+								onPress={handleAddOrUpdateQuestion}
 							>
-								<ThemedText style={{color: '#fff', fontWeight: 'bold'}}>Adicionar</ThemedText>
+								<ThemedText style={{color: '#fff', fontWeight: 'bold'}}>
+									{editingIndex !== null ? 'Salvar' : 'Adicionar'}
+								</ThemedText>
 							</TouchableOpacity>
 						</View>
 					</ThemedView>
@@ -316,6 +409,21 @@ const styles = StyleSheet.create({
 		overflow: 'hidden',
 		marginBottom: 8,
 	},
+	patientListContainer: {
+		marginTop: 8,
+		marginBottom: 8,
+	},
+	checkboxContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginBottom: 12,
+	},
+	checkbox: {
+		marginRight: 10,
+	},
+	checkboxLabel: {
+		fontSize: 16,
+	},
 	switchContainer: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
@@ -347,6 +455,17 @@ const styles = StyleSheet.create({
 		justifyContent: 'space-between',
 		alignItems: 'center',
 		marginBottom: 8,
+	},
+	actionButtons: {
+		flexDirection: 'row',
+		gap: 8,
+	},
+	iconButton: {
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		justifyContent: 'center',
+		alignItems: 'center',
 	},
 	questionOptions: {
 		fontSize: 12,
@@ -393,5 +512,43 @@ const styles = StyleSheet.create({
 		padding: 14,
 		borderRadius: 12,
 		alignItems: 'center',
+	},
+	selectedPatientsContainer: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		gap: 8,
+		marginBottom: 12,
+	},
+	selectedPatientChip: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		paddingVertical: 6,
+		paddingHorizontal: 12,
+		borderRadius: 20,
+		gap: 8,
+	},
+	selectedPatientText: {
+		fontSize: 14,
+	},
+	autocompleteContainer: {
+		position: 'relative',
+		zIndex: 10,
+	},
+	suggestionsList: {
+		position: 'absolute',
+		top: '100%',
+		left: 0,
+		right: 0,
+		borderWidth: 1,
+		borderRadius: 12,
+		marginTop: 4,
+		maxHeight: 200,
+		overflow: 'hidden',
+		zIndex: 20,
+	},
+	suggestionItem: {
+		padding: 12,
+		borderBottomWidth: 1,
+		borderBottomColor: 'rgba(0,0,0,0.05)',
 	},
 });

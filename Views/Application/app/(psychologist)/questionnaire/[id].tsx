@@ -51,6 +51,7 @@ export default function QuestionnaireDetailScreen() {
 	const dangerColor = '#EF4444';
 	const successColor = '#10B981';
 	const infoColor = '#3B82F6';
+	const warningColor = '#F59E0B';
 
 	useEffect(() => {
 		if (toast) {
@@ -186,13 +187,32 @@ export default function QuestionnaireDetailScreen() {
 			{toast && <Toast message={toast.message} type={toast.type} />}
 			<AmbientBackground/>
 			<View style={[styles.header, {borderBottomColor: surfaceColor}]}>
-				<TouchableOpacity onPress={() => router.back()}>
+				<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
 					<IconSymbol name="chevron.left" size={24} color={textColor}/>
 				</TouchableOpacity>
-				<ThemedText type="subtitle" numberOfLines={1} style={{flex: 1, textAlign: 'center'}}>
+				
+				<View style={styles.separator} />
+				
+				<ThemedText type="subtitle" style={styles.headerTitle}>
 					{questionnaire.title}
 				</ThemedText>
-				<View style={{width: 24}}/>
+				
+				<View style={styles.separator} />
+				
+				<View style={styles.headerActions}>
+					<TouchableOpacity 
+						style={[styles.actionIconButton, {backgroundColor: warningColor}]}
+						onPress={() => router.push(`/(psychologist)/questionnaire/edit/${id}`)}
+					>
+						<IconSymbol name="edit" size={16} color="#fff"/>
+					</TouchableOpacity>
+					<TouchableOpacity 
+						style={[styles.actionIconButton, {backgroundColor: dangerColor}]}
+						onPress={() => setDeleteModalVisible(true)}
+					>
+						<IconSymbol name="trash" size={16} color="#fff"/>
+					</TouchableOpacity>
+				</View>
 			</View>
 
 			<View style={[styles.tabs, {borderBottomColor: borderColor}]}>
@@ -258,20 +278,6 @@ export default function QuestionnaireDetailScreen() {
 				/>
 			)}
 
-			<TouchableOpacity
-				style={[styles.fab, {backgroundColor: primaryColor, bottom: 150}]}
-				onPress={() => router.push(`/(psychologist)/questionnaire/edit/${id}`)}
-			>
-				<IconSymbol name="edit" size={24} color="#fff"/>
-			</TouchableOpacity>
-
-			<TouchableOpacity
-				style={[styles.fab, {backgroundColor: dangerColor}]}
-				onPress={() => setDeleteModalVisible(true)}
-			>
-				<IconSymbol name="trash" size={24} color="#fff"/>
-			</TouchableOpacity>
-
 			<ConfirmModal
 				visible={deleteModalVisible}
 				title="Excluir Questionário"
@@ -296,11 +302,36 @@ const styles = StyleSheet.create({
 	},
 	header: {
 		flexDirection: 'row',
-		justifyContent: 'space-between',
 		alignItems: 'center',
 		padding: 20,
 		paddingTop: 50,
 		borderBottomWidth: 1,
+	},
+	backButton: {
+		width: '10%',
+		alignItems: 'flex-start',
+	},
+	headerTitle: {
+		flex: 1,
+		textAlign: 'center',
+	},
+	headerActions: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	separator: {
+		width: 1,
+		height: 24,
+		backgroundColor: 'rgba(150, 150, 150, 0.2)',
+		marginHorizontal: 8,
+	},
+	actionIconButton: {
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		justifyContent: 'center',
+		alignItems: 'center',
 	},
 	tabs: {
 		flexDirection: 'row',
@@ -339,21 +370,6 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		marginTop: 40,
 		opacity: 0.6,
-	},
-	fab: {
-		position: 'absolute',
-		bottom: 80,
-		right: 30,
-		width: 56,
-		height: 56,
-		borderRadius: 28,
-		justifyContent: 'center',
-		alignItems: 'center',
-		elevation: 6,
-		shadowColor: '#000',
-		shadowOffset: {width: 0, height: 4},
-		shadowOpacity: 0.3,
-		shadowRadius: 4,
 	},
 	applicationCard: {
 		flexDirection: 'row',

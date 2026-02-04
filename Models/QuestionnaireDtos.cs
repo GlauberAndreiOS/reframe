@@ -6,6 +6,7 @@ public class CreateQuestionnaireDto
     public List<QuestionDto> Questions { get; set; } = new();
     public bool IsShared { get; set; } = false;
     public Guid? TargetPatientId { get; set; }
+    public List<Guid>? TargetPatientIds { get; set; }
 }
 
 public class QuestionDto
