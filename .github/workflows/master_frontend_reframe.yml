@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'Views/Application/**'
 
@@ -47,6 +47,3 @@ jobs:
 
       - name: Build Android
         run: eas build --platform android --profile preview --non-interactive
-
-#      - name: Build iOS
-#        run: eas build --platform ios --profile preview --non-interactive
