@@ -1,7 +1,8 @@
-import React, {ReactNode} from 'react';
-import {StyleSheet, Text, TextInput, TextInputProps, View} from 'react-native';
+import React, {ReactNode, useState} from 'react';
+import {StyleSheet, Text, TextInput, TextInputProps, TouchableOpacity, View} from 'react-native';
 import {useThemeColor} from '@/hooks/use-theme-color';
 import {useColorScheme} from '@/hooks/use-color-scheme';
+import {IconSymbol} from '@/components/ui/icon-symbol';
 
 export type HelperTextType = 'error' | 'success' | 'info';
 
@@ -13,13 +14,15 @@ interface GlassInputProps extends TextInputProps {
     rightAdornment?: ReactNode;
 }
 
-export function GlassInput({helperText, rightAdornment, style, ...props}: GlassInputProps) {
+export function GlassInput({helperText, rightAdornment, style, secureTextEntry, ...props}: GlassInputProps) {
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
+	const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
 	const textColor = useThemeColor({}, 'text');
 	const borderColor = useThemeColor({}, 'border');
 	const placeholderColor = useThemeColor({}, 'muted');
+	const iconColor = useThemeColor({}, 'icon');
 
 	const getStatusColor = () => {
 		if (!helperText) return borderColor;
@@ -34,6 +37,9 @@ export function GlassInput({helperText, rightAdornment, style, ...props}: GlassI
 			return borderColor;
 		}
 	};
+
+	const isPassword = secureTextEntry !== undefined;
+	const showPasswordToggle = isPassword && !rightAdornment;
 
 	return (
 		<View style={styles.container}>
@@ -50,16 +56,30 @@ export function GlassInput({helperText, rightAdornment, style, ...props}: GlassI
 					style={[
 						styles.input,
 						{color: textColor},
-
-						rightAdornment && {paddingRight: 48}
+						(rightAdornment || showPasswordToggle) && {paddingRight: 48}
 					]}
 					placeholderTextColor={placeholderColor}
+					secureTextEntry={isPassword ? !isPasswordVisible : false}
 					{...props}
 				/>
+				
 				{rightAdornment && (
 					<View style={styles.adornmentContainer}>
 						{rightAdornment}
 					</View>
+				)}
+
+				{showPasswordToggle && (
+					<TouchableOpacity 
+						style={styles.adornmentContainer}
+						onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+					>
+						<IconSymbol 
+							name={isPasswordVisible ? 'eye.slash.fill' : 'eye.fill'} 
+							size={20} 
+							color={iconColor} 
+						/>
+					</TouchableOpacity>
 				)}
 			</View>
 

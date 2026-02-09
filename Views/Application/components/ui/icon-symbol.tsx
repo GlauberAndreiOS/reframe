@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import {SymbolWeight} from 'expo-symbols';
-import {ComponentProps} from 'react';
-import {OpaqueColorValue, type StyleProp, type TextStyle} from 'react-native';
+import { SymbolWeight } from 'expo-symbols';
+import { ComponentProps } from 'react';
+import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
 const MAPPING = {
 	'house.fill': 'home',
@@ -32,6 +32,10 @@ const MAPPING = {
 	'check-box': 'check-box',
 	'check-box-outline-blank': 'check-box-outline-blank',
 	'close': 'close',
+	'mic.fill': 'mic',
+	'waveform.path.ecg': 'graphic-eq',
+	'eye.fill': 'visibility',
+	'eye.slash.fill': 'visibility-off',
 } as Partial<Record<string, ComponentProps<typeof MaterialIcons>['name']>>;
 
 export type IconSymbolName = keyof typeof MAPPING;
@@ -43,12 +47,12 @@ export function IconSymbol({
 	color,
 	style,
 }: {
-    name: IconSymbolName | string;
-    size?: number;
-    color: string | OpaqueColorValue;
-    style?: StyleProp<TextStyle>;
-    weight?: SymbolWeight;
+	name: IconSymbolName | string;
+	size?: number;
+	color: string | OpaqueColorValue;
+	style?: StyleProp<TextStyle>;
+	weight?: SymbolWeight;
 }) {
 	const iconName = (MAPPING[name as IconSymbolName] || name) as ComponentProps<typeof MaterialIcons>['name'];
-	return <MaterialIcons color={color} size={size} name={iconName} style={style}/>;
+	return <MaterialIcons color={color} size={size} name={iconName} style={style} />;
 }

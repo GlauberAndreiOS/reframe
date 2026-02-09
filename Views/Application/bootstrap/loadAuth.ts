@@ -1,10 +1,10 @@
-import * as SecureStore from 'expo-secure-store';
+import {storage} from "@/services/storage";
 
 export async function loadAuth() {
 	try {
 		const [token, userType] = await Promise.all([
-			SecureStore.getItemAsync('token'),
-			SecureStore.getItemAsync('userType'),
+			storage.getItem('token'),
+			storage.getItem('userType'),
 		]);
 
 		return {

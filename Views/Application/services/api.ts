@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import {storage} from "@/services/storage";
 
 const api = axios.create({
 	baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5088/api',
@@ -24,7 +24,7 @@ export const registerUnauthorizedHandler = (handler: () => void | Promise<void>)
 
 api.interceptors.request.use(
 	async (config) => {
-		let env = process.env.EXPO_PUBLIC_APP_ENV || await SecureStore.getItemAsync('app_env')
+		let env = process.env.EXPO_PUBLIC_APP_ENV || await storage.getItem('app_env')
 
 		if (!env && config.data) {
 			try {
@@ -38,7 +38,7 @@ api.interceptors.request.use(
 
 		config.headers['X-Context-Application'] = env || 'Prod';
 
-		const token = await SecureStore.getItemAsync('token');
+		const token = await storage.getItem('token');
 		if (token) {
 			config.headers.Authorization = `Bearer ${token}`;
 		}
