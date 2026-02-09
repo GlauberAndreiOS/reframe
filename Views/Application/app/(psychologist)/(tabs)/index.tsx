@@ -121,7 +121,7 @@ export default function PatientsScreen() {
 						showsVerticalScrollIndicator={false}
 						ListEmptyComponent={
 							<View style={styles.center}>
-								<IconSymbol name="person.2" size={48} color={mutedColor}/>
+								<IconSymbol name="person.2.fill" size={48} color={mutedColor}/>
 								<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
 									Nenhum paciente vinculado.
 								</ThemedText>

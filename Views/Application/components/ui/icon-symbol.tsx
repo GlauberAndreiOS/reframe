@@ -34,6 +34,8 @@ const MAPPING = {
 	'close': 'close',
 	'mic.fill': 'mic',
 	'waveform.path.ecg': 'graphic-eq',
+	'eye.fill': 'visibility',
+	'eye.slash.fill': 'visibility-off',
 } as Partial<Record<string, ComponentProps<typeof MaterialIcons>['name']>>;
 
 export type IconSymbolName = keyof typeof MAPPING;

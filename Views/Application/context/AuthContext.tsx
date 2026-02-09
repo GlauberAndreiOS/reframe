@@ -1,8 +1,8 @@
 import React, {createContext, ReactNode, useCallback, useContext, useEffect, useState,} from 'react';
-import * as SecureStore from 'expo-secure-store';
 import {useRouter, useSegments} from 'expo-router';
 import {useInternetStatus} from '@/hooks/use-internal-status';
 import {registerUnauthorizedHandler} from "@/services/api";
+import {storage} from "@/services/storage";
 
 interface AuthState {
     token: string | null;
@@ -43,10 +43,9 @@ export function AuthProvider({children, initialAuth}: AuthProviderProps) {
 	const isConnected = useInternetStatus();
 
 	useEffect(() => {
-
+		// @ts-ignore
 		if (segments.length === 0) return;
-
-
+		
 		const inAuthGroup = segments[0] === '(auth)';
 
 		if (!auth.token) {
@@ -58,10 +57,10 @@ export function AuthProvider({children, initialAuth}: AuthProviderProps) {
 
 		if (isConnected && inAuthGroup) {
 			if (auth.userType === 0) {
-
+				// @ts-ignore
 				router.replace('/(psychologist)');
 			} else if (auth.userType === 1) {
-
+				// @ts-ignore
 				router.replace('/(patient)');
 			}
 		}
@@ -70,8 +69,8 @@ export function AuthProvider({children, initialAuth}: AuthProviderProps) {
 
 	const signIn = async (token: string, userType: number, email?: string) => {
 		const promises = [
-			SecureStore.setItemAsync('token', token),
-			SecureStore.setItemAsync('userType', userType.toString()),
+			storage.setItem('token', token),
+			storage.setItem('userType', userType.toString()),
 		];
 
 		if (email) {
@@ -79,7 +78,7 @@ export function AuthProvider({children, initialAuth}: AuthProviderProps) {
 			const lower = email.toLowerCase();
 			if (lower.includes('@reframe.gandrei.dev.br')) env = 'Dev';
 			if (lower.includes('@reframe-homolog.gandrei.dev.br')) env = 'Homolog';
-			promises.push(SecureStore.setItemAsync('app_env', env));
+			promises.push(storage.setItem('app_env', env));
 		}
 
 		await Promise.all(promises)
@@ -92,9 +91,9 @@ export function AuthProvider({children, initialAuth}: AuthProviderProps) {
 
 	const signOut = useCallback(async () => {
 		await Promise.all([
-			SecureStore.deleteItemAsync('token'),
-			SecureStore.deleteItemAsync('userType'),
-			SecureStore.deleteItemAsync('app_env'),
+			storage.deleteItem('token'),
+			storage.deleteItem('userType'),
+			storage.deleteItem('app_env'),
 		]);
 
 		setAuth({

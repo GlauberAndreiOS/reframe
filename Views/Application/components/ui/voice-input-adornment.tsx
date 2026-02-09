@@ -1,107 +1,142 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { TouchableOpacity } from 'react-native';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent, ExpoSpeechRecognitionResultEvent, ExpoSpeechRecognitionErrorEvent } from 'expo-speech-recognition';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { TouchableOpacity, Platform } from 'react-native';
+import {
+	ExpoSpeechRecognitionModule,
+	useSpeechRecognitionEvent,
+	ExpoSpeechRecognitionResultEvent,
+	ExpoSpeechRecognitionErrorEvent,
+} from 'expo-speech-recognition';
+
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/ToastContext';
+import { getActiveSession, setActiveSession } from '@/utils/speech-session';
 
 interface VoiceInputAdornmentProps {
-    onResult: (text: string) => void;
-    onListeningChange?: (isListening: boolean) => void;
+	id: string;
+	value: string;
+	onResult: (text: string) => void;
+	onListeningChange?: (isListening: boolean) => void;
 }
 
-export function VoiceInputAdornment({ onResult, onListeningChange }: VoiceInputAdornmentProps) {
-    const { showToast } = useToast();
-    const [listening, setListening] = useState(false);
-    const silenceTimer = useRef<NodeJS.Timeout | null>(null);
-    const tintColor = useThemeColor({}, 'tint');
-    const dangerColor = useThemeColor({}, 'danger');
-    const textRef = useRef('');
+export function VoiceInputAdornment({
+										id,
+										value,
+										onResult,
+										onListeningChange,
+									}: VoiceInputAdornmentProps) {
+	const isWeb = Platform.OS === 'web';
+	const { showToast } = useToast();
 
-    const resetSilenceTimer = () => {
-        if (silenceTimer.current) {
-            clearTimeout(silenceTimer.current);
-        }
-        silenceTimer.current = setTimeout(() => {
-            stopListening();
-        }, 2000);
-    };
+	const [listening, setListening] = useState(false);
+	const listeningRef = useRef(false);
 
-    const startListening = async () => {
-        const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-        if (!result.granted) {
-            showToast('Permissão de microfone negada', 'error');
-            return;
-        }
+	const baseTextRef = useRef('');
+	const lastTranscriptRef = useRef('');
 
-        setListening(true);
-        onListeningChange?.(true);
-        textRef.current = '';
+	const tintColor = useThemeColor({}, 'tint');
+	const dangerColor = useThemeColor({}, 'danger');
 
-        ExpoSpeechRecognitionModule.start({
-            lang: 'pt-BR',
-            interimResults: true,
-            maxAlternatives: 1,
-            continuous: true,
-        });
+	useEffect(() => {
+		listeningRef.current = listening;
+		onListeningChange?.(listening);
+	}, [listening, onListeningChange]);
 
-        resetSilenceTimer();
-    };
+	const startListening = useCallback(async () => {
+		if (isWeb) return;
 
-    const stopListening = () => {
-        if (silenceTimer.current) {
-            clearTimeout(silenceTimer.current);
-            silenceTimer.current = null;
-        }
-        ExpoSpeechRecognitionModule.stop();
-        setListening(false);
-        onListeningChange?.(false);
-    };
+		try {
+			const active = getActiveSession();
+			if (active && active !== id) return;
 
-    useSpeechRecognitionEvent('result', (event: ExpoSpeechRecognitionResultEvent) => {
-        const result = event.results[0]?.transcript;
-        if (result) {
-            if (result !== textRef.current) {
-                textRef.current = result;
-                onResult(result);
-                resetSilenceTimer();
-            }
-        }
-    });
+			const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+			if (!perm.granted) {
+				showToast('Permissão de microfone negada', 'error');
+				return;
+			}
 
-    useSpeechRecognitionEvent('error', (event: ExpoSpeechRecognitionErrorEvent) => {
-        console.log('Speech recognition error:', event);
-        showToast('Erro no reconhecimento de voz', 'error');
-        stopListening();
-    });
+			baseTextRef.current = value?.trim() ? value + ' ' : '';
+			lastTranscriptRef.current = '';
 
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (listening) {
-                ExpoSpeechRecognitionModule.stop();
-            }
-            if (silenceTimer.current) {
-                clearTimeout(silenceTimer.current);
-            }
-        };
-    }, []);
+			setActiveSession(id);
+			setListening(true);
 
-    const toggleListening = () => {
-        if (listening) {
-            stopListening();
-        } else {
-            startListening();
-        }
-    };
+			ExpoSpeechRecognitionModule.start({
+				lang: 'pt-BR',
+				interimResults: true,
+				maxAlternatives: 1,
+				continuous: false,
+			});
+		} catch {
+			showToast('Erro ao iniciar reconhecimento de voz', 'error');
+			setListening(false);
+			setActiveSession(null);
+		}
+	}, [id, value, showToast, isWeb]);
 
-    return (
-        <TouchableOpacity onPress={toggleListening} style={{ padding: 4 }}>
-            <IconSymbol
-                name={listening ? 'waveform.path.ecg' : 'mic.fill'}
-                size={24}
-                color={listening ? dangerColor : tintColor}
-            />
-        </TouchableOpacity>
-    );
+	const stopListening = useCallback(() => {
+		if (isWeb) return;
+
+		if (getActiveSession() === id) {
+			setActiveSession(null);
+		}
+		try {
+			ExpoSpeechRecognitionModule.stop();
+		} catch {}
+		setListening(false);
+	}, [id, isWeb]);
+
+	useSpeechRecognitionEvent('result', (event: ExpoSpeechRecognitionResultEvent) => {
+		if (isWeb) return;
+		if (getActiveSession() !== id) return;
+
+		const transcript = event.results?.[0]?.transcript;
+		if (!transcript) return;
+		if (transcript === lastTranscriptRef.current) return;
+
+		lastTranscriptRef.current = transcript;
+		onResult(baseTextRef.current + transcript);
+	});
+
+	useSpeechRecognitionEvent('error', (event: ExpoSpeechRecognitionErrorEvent) => {
+		if (isWeb) return;
+		if (getActiveSession() !== id) return;
+
+		if (event.error === 'no-speech' || event.code === 7) {
+			setActiveSession(null);
+			setListening(false);
+			return;
+		}
+
+		showToast('Erro no reconhecimento de voz', 'error');
+		setActiveSession(null);
+		setListening(false);
+	});
+
+	useEffect(() => {
+		return () => {
+			if (isWeb) return;
+			if (getActiveSession() === id) {
+				try { ExpoSpeechRecognitionModule.stop(); } catch {}
+				setActiveSession(null);
+			}
+		};
+	}, [id, isWeb]);
+
+	const toggleListening = () => {
+		if (listeningRef.current) stopListening();
+		else void startListening();
+	};
+
+	if (isWeb) return null;
+
+	return (
+		<TouchableOpacity onPress={toggleListening} style={{ padding: 4 }}>
+			<IconSymbol
+				name={listening ? 'waveform.path.ecg' : 'mic.fill'}
+				size={24}
+				color={listening ? dangerColor : tintColor}
+			/>
+		</TouchableOpacity>
+	);
 }

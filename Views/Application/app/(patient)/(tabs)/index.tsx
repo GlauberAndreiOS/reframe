@@ -12,8 +12,6 @@ import { useThoughts } from '@/hooks/(patient)/thoughts.hooks';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { AmbientBackground } from '@/components/ui/ambient-background';
-import { GlassInput } from '@/components/ui/glass-input';
-import { VoiceInputAdornment } from '@/components/ui/voice-input-adornment';
 
 export default function ThoughtsScreen() {
 	const router = useRouter();
@@ -31,7 +29,6 @@ export default function ThoughtsScreen() {
 
 	const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 	const [thoughtToDelete, setThoughtToDelete] = useState<string | null>(null);
-	const [searchText, setSearchText] = useState('');
 
 	useFocusEffect(
 		useCallback(() => {
@@ -110,19 +107,6 @@ export default function ThoughtsScreen() {
 							/>
 						</TouchableOpacity>
 					</View>
-				</View>
-
-				<View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
-					<GlassInput
-						placeholder="O que você está sentindo?"
-						value={searchText}
-						onChangeText={setSearchText}
-						rightAdornment={
-							<VoiceInputAdornment
-								onResult={(text) => setSearchText(text)}
-							/>
-						}
-					/>
 				</View>
 
 				<FlatList

@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react';
 import * as SplashScreen from 'expo-splash-screen';
-import * as SecureStore from 'expo-secure-store';
 import {ensureDbReady} from '@/database/bootstrap';
+import {storage} from "@/services/storage";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,8 +19,8 @@ export function useBootstrap() {
 			try {
 				const dbPromise = ensureDbReady();
 
-				const tokenPromise = SecureStore.getItemAsync('token');
-				const userTypePromise = SecureStore.getItemAsync('userType');
+				const tokenPromise = storage.getItem('token');
+				const userTypePromise = storage.getItem('userType');
 
 				const [token, userType] = await Promise.all([
 					tokenPromise,
