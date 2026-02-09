@@ -48,6 +48,16 @@
         {
           "fetchInterval": 15
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Reframe to use the microphone.",
+          "speechRecognitionPermission": "Allow Reframe to use speech recognition.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
       ]
     ],
     "experiments": {
