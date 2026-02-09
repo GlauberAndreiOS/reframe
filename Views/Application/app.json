@@ -16,7 +16,8 @@
         "UIBackgroundModes": [
           "fetch"
         ]
-      }
+      },
+      "buildNumber": "1.2.0"
     },
     "android": {
       "backgroundColor": "#151718",
@@ -25,7 +26,8 @@
         "foregroundImage": "./assets/images/logo(Dark).png",
         "backgroundColor": "#151718"
       },
-      "package": "com.gandreidev.reframe"
+      "package": "com.gandreidev.reframe",
+      "versionCode": 1
     },
     "plugins": [
       "expo-router",
