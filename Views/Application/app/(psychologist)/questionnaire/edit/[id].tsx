@@ -1,74 +1,123 @@
-import React, {useEffect, useState} from 'react';
-import {Modal, ScrollView, StyleSheet, Switch, TouchableOpacity, View} from 'react-native';
-import {useLocalSearchParams, useRouter} from 'expo-router';
-import {useAuth} from '@/context/AuthContext';
+import React, { useEffect, useState } from 'react';
+import { Modal, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useAuth, useToast } from '@/context';
 import api from '@/services/api';
-import {ThemedView} from '@/components/themed-view';
-import {ThemedText} from '@/components/themed-text';
-import {GlassInput} from '@/components/ui/glass-input';
-import {Card} from '@/components/ui/card';
-import {IconSymbol} from '@/components/ui/icon-symbol';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {Toast, ToastType} from '@/components/ui/toast';
+import {
+	ThemedView,
+	ThemedText,
+	GlassInput,
+	Card,
+	IconSymbol,
+	AmbientBackground,
+	Toast,
+} from '@/components';
+import { useThemeColor } from '@/hooks';
 
+// Types
 interface Question {
-    title: string;
-    type: 'text' | 'select' | 'radio' | 'checkbox';
-    data: string[];
+  title: string;
+  type: 'text' | 'select' | 'radio' | 'checkbox';
+  data: string[];
 }
 
-export default function EditQuestionnaireScreen() {
-	const {id} = useLocalSearchParams();
-	const router = useRouter();
-	const {token} = useAuth();
-	const [title, setTitle] = useState('');
-	const [questions, setQuestions] = useState<Question[]>([]);
-	const [isShared, setIsShared] = useState(false);
-	const [toast, setToast] = useState<{message: string, type: ToastType} | null>(null);
-	const [editingIndex, setEditingIndex] = useState<number | null>(null);
+interface Questionnaire {
+  id: string;
+  title: string;
+  questions: Question[];
+  isShared: boolean;
+}
 
+// Constants
+const MESSAGES = {
+	LOAD_ERROR: 'Erro ao carregar o questionário.',
+	QUESTION_TITLE_REQUIRED: 'O título da pergunta é obrigatório.',
+	OPTIONS_REQUIRED: 'Adicione opções separadas por vírgula para este tipo de pergunta.',
+	QUESTIONNAIRE_TITLE_REQUIRED: 'O título do questionário é obrigatório.',
+	AT_LEAST_ONE_QUESTION: 'Adicione pelo menos uma pergunta.',
+	UPDATE_SUCCESS: 'Questionário atualizado com sucesso!',
+	UPDATE_ERROR: 'Não foi possível atualizar o questionário.',
+};
+
+const API_ENDPOINTS = {
+	GET_QUESTIONNAIRE: (id: string) => `/Questionnaire/${id}`,
+	UPDATE_QUESTIONNAIRE: (id: string) => `/Questionnaire/${id}`,
+};
+
+const QUESTION_TYPES = [
+	{ value: 'text' as const, label: 'Texto' },
+	{ value: 'select' as const, label: 'Seleção' },
+	{ value: 'radio' as const, label: 'Única' },
+	{ value: 'checkbox' as const, label: 'Múltipla' },
+];
+
+const COLORS = {
+	ERROR: '#EF4444',
+	WARNING: '#F59E0B',
+};
+
+const DIMENSIONS = {
+	HEADER_PADDING_TOP: 50,
+	MODAL_PADDING: 20,
+	CARD_MARGIN: 12,
+	GAP: 8,
+	BUTTON_SIZE: 32,
+	BUTTON_RADIUS: 16,
+	OPTIONS_MULTILINE_HEIGHT: 80,
+	BOTTOM_SPACING: 40,
+};
+
+// Component
+export default function EditQuestionnaireScreen() {
+	const { id } = useLocalSearchParams();
+	const router = useRouter();
+	const { token } = useAuth();
+	const showToast = useToast();
 	const primaryColor = useThemeColor({}, 'tint');
 	const textColor = useThemeColor({}, 'text');
 	const surfaceColor = useThemeColor({}, 'surface');
-	const errorColor = '#EF4444';
-	const warningColor = '#F59E0B';
-	
+
+	// Form state
+	const [title, setTitle] = useState('');
+	const [questions, setQuestions] = useState<Question[]>([]);
+	const [isShared, setIsShared] = useState(false);
+
+	// Question editor modal state
 	const [modalVisible, setModalVisible] = useState(false);
+	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 	const [newQuestionTitle, setNewQuestionTitle] = useState('');
 	const [newQuestionType, setNewQuestionType] = useState<'text' | 'select' | 'radio' | 'checkbox'>('text');
 	const [newQuestionOptions, setNewQuestionOptions] = useState<string>('');
 
+	// Effects
 	useEffect(() => {
-		const fetchQuestionnaire = async () => {
-			try {
-				const response = await api.get(`/Questionnaire/${id}`, {
-					headers: {Authorization: `Bearer ${token}`}
-				});
+		if (id) {
+			fetchQuestionnaire();
+		}
+	}, [id, token]);
+
+	// Fetch questionnaire from API
+	const fetchQuestionnaire = () => {
+		const endpoint = API_ENDPOINTS.GET_QUESTIONNAIRE(id as string);
+		api.get(endpoint, {
+			headers: { Authorization: `Bearer ${token}` }
+		})
+			.then(response => {
 				const data = response.data;
 				setTitle(data.title);
 				setQuestions(data.questions);
 				setIsShared(data.isShared || false);
-			} catch (error) {
+			})
+			.catch(error => {
 				console.error('Error fetching questionnaire:', error);
-				setToast({message: 'Erro ao carregar o questionário.', type: 'error'});
-			}
-		};
-		if (id) void fetchQuestionnaire();
-	}, [id, token]);
+				showToast(MESSAGES.LOAD_ERROR, 'error');
+			});
+	};
 
-	useEffect(() => {
-		if (toast) {
-			const timer = setTimeout(() => {
-				setToast(null);
-			}, 3000);
-			return () => clearTimeout(timer);
-		}
-	}, [toast]);
-
+	// Question handlers
 	const handleAddOrUpdateQuestion = () => {
 		if (!newQuestionTitle.trim()) {
-			setToast({message: 'O título da pergunta é obrigatório.', type: 'error'});
+			showToast(MESSAGES.QUESTION_TITLE_REQUIRED, 'error');
 			return;
 		}
 
@@ -77,7 +126,7 @@ export default function EditQuestionnaireScreen() {
 			: [];
 
 		if (newQuestionType !== 'text' && options.length === 0) {
-			setToast({message: 'Adicione opções separadas por vírgula para este tipo de pergunta.', type: 'error'});
+			showToast(MESSAGES.OPTIONS_REQUIRED, 'error');
 			return;
 		}
 
@@ -94,24 +143,31 @@ export default function EditQuestionnaireScreen() {
 		} else {
 			setQuestions([...questions, questionData]);
 		}
-		
+
 		closeModal();
 	};
 
-	const openEditModal = (index: number) => {
-		const q = questions[index];
-		setNewQuestionTitle(q.title);
-		setNewQuestionType(q.type as any);
-		setNewQuestionOptions(q.data ? q.data.join(', ') : '');
-		setEditingIndex(index);
-		setModalVisible(true);
+	const removeQuestion = (index: number) => {
+		const newQuestions = [...questions];
+		newQuestions.splice(index, 1);
+		setQuestions(newQuestions);
 	};
 
+	// Modal handlers
 	const openAddModal = () => {
 		setNewQuestionTitle('');
 		setNewQuestionType('text');
 		setNewQuestionOptions('');
 		setEditingIndex(null);
+		setModalVisible(true);
+	};
+
+	const openEditModal = (index: number) => {
+		const q = questions[index];
+		setNewQuestionTitle(q.title);
+		setNewQuestionType(q.type);
+		setNewQuestionOptions(q.data ? q.data.join(', ') : '');
+		setEditingIndex(index);
 		setModalVisible(true);
 	};
 
@@ -123,51 +179,171 @@ export default function EditQuestionnaireScreen() {
 		setNewQuestionOptions('');
 	};
 
-	const handleSave = async () => {
+	// Form submission
+	const handleSave = () => {
 		if (!title.trim()) {
-			setToast({message: 'O título do questionário é obrigatório.', type: 'error'});
+			showToast(MESSAGES.QUESTIONNAIRE_TITLE_REQUIRED, 'error');
 			return;
 		}
 		if (questions.length === 0) {
-			setToast({message: 'Adicione pelo menos uma pergunta.', type: 'error'});
+			showToast(MESSAGES.AT_LEAST_ONE_QUESTION, 'error');
 			return;
 		}
 
-		try {
-			await api.put(`/Questionnaire/${id}`, {
-				title,
-				questions,
-				isShared,
-			}, {
-				headers: {Authorization: `Bearer ${token}`}
+		const endpoint = API_ENDPOINTS.UPDATE_QUESTIONNAIRE(id as string);
+		api.put(endpoint, {
+			title,
+			questions,
+			isShared,
+		}, {
+			headers: { Authorization: `Bearer ${token}` }
+		})
+			.then(() => {
+				showToast(MESSAGES.UPDATE_SUCCESS, 'success');
+				setTimeout(() => {
+					router.back();
+				}, 1000);
+			})
+			.catch(error => {
+				console.error('Error updating questionnaire:', error);
+				showToast(MESSAGES.UPDATE_ERROR, 'error');
 			});
-			setToast({message: 'Questionário atualizado com sucesso!', type: 'success'});
-			setTimeout(() => {
-				router.back();
-			}, 1000);
-		} catch (error) {
-			console.error('Error updating questionnaire:', error);
-			setToast({message: 'Não foi possível atualizar o questionário.', type: 'error'});
-		}
 	};
 
-	const removeQuestion = (index: number) => {
-		const newQuestions = [...questions];
-		newQuestions.splice(index, 1);
-		setQuestions(newQuestions);
-	};
+	// Render functions
+	const renderQuestionTypeButton = (type: typeof QUESTION_TYPES[number]) => (
+		<TouchableOpacity
+			key={type.value}
+			style={[
+				styles.typeButton,
+				{ borderColor: surfaceColor },
+				newQuestionType === type.value && {
+					backgroundColor: primaryColor,
+					borderColor: primaryColor
+				}
+			]}
+			onPress={() => setNewQuestionType(type.value)}
+		>
+			<ThemedText style={[
+				styles.typeButtonText,
+				newQuestionType === type.value && { color: '#fff' }
+			]}>
+				{type.label}
+			</ThemedText>
+		</TouchableOpacity>
+	);
 
+	const renderQuestionCard = (q: Question, index: number) => (
+		<Card key={index} style={styles.questionCard}>
+			<View style={styles.questionHeader}>
+				<ThemedText type="defaultSemiBold" style={{ flex: 1 }}>
+					{index + 1}. {q.title}
+				</ThemedText>
+
+				<View style={styles.actionButtons}>
+					<TouchableOpacity
+						style={[styles.iconButton, { backgroundColor: COLORS.WARNING + '20' }]}
+						onPress={() => openEditModal(index)}
+					>
+						<IconSymbol name="edit" size={18} color={COLORS.WARNING} />
+					</TouchableOpacity>
+
+					<TouchableOpacity
+						style={[styles.iconButton, { backgroundColor: COLORS.ERROR + '20' }]}
+						onPress={() => removeQuestion(index)}
+					>
+						<IconSymbol name="trash" size={18} color={COLORS.ERROR} />
+					</TouchableOpacity>
+				</View>
+			</View>
+			<ThemedText
+				style={{
+					color: primaryColor,
+					fontSize: 12,
+					textTransform: 'uppercase',
+					marginBottom: 4
+				}}
+			>
+				Tipo: {q.type}
+			</ThemedText>
+			{q?.data?.length > 0 && (
+				<ThemedText style={styles.questionOptions}>
+					Opções: {q.data.join(', ')}
+				</ThemedText>
+			)}
+		</Card>
+	);
+
+	const renderQuestionEditorModal = () => (
+		<Modal
+			visible={modalVisible}
+			animationType="slide"
+			transparent={true}
+			onRequestClose={closeModal}
+		>
+			<View style={styles.modalContainer}>
+				<ThemedView style={styles.modalContent}>
+					<ThemedText type="subtitle" style={styles.modalTitle}>
+						{editingIndex !== null ? 'Editar Pergunta' : 'Nova Pergunta'}
+					</ThemedText>
+
+					<ThemedText style={styles.label}>Pergunta</ThemedText>
+					<GlassInput
+						placeholder="Digite a pergunta"
+						value={newQuestionTitle}
+						onChangeText={setNewQuestionTitle}
+					/>
+
+					<ThemedText style={styles.label}>Tipo de Resposta</ThemedText>
+					<View style={styles.typeSelector}>
+						{QUESTION_TYPES.map(renderQuestionTypeButton)}
+					</View>
+
+					{newQuestionType !== 'text' && (
+						<>
+							<ThemedText style={styles.label}>Opções (separadas por vírgula)</ThemedText>
+							<GlassInput
+								placeholder="Opção 1, Opção 2, Opção 3"
+								value={newQuestionOptions}
+								onChangeText={setNewQuestionOptions}
+								multiline
+								style={{ height: DIMENSIONS.OPTIONS_MULTILINE_HEIGHT, textAlignVertical: 'top' }}
+							/>
+						</>
+					)}
+
+					<View style={styles.modalButtons}>
+						<TouchableOpacity
+							style={[styles.modalButton, { borderColor: surfaceColor, borderWidth: 1 }]}
+							onPress={closeModal}
+						>
+							<ThemedText>Cancelar</ThemedText>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={[styles.modalButton, { backgroundColor: primaryColor }]}
+							onPress={handleAddOrUpdateQuestion}
+						>
+							<ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>
+								{editingIndex !== null ? 'Salvar' : 'Adicionar'}
+							</ThemedText>
+						</TouchableOpacity>
+					</View>
+				</ThemedView>
+			</View>
+		</Modal>
+	);
+
+	// Main render
 	return (
 		<ThemedView style={styles.container}>
-			{toast && <Toast message={toast.message} type={toast.type} />}
-			<AmbientBackground/>
-			<View style={[styles.header, {borderBottomColor: surfaceColor}]}>
+			<AmbientBackground />
+			<View style={[styles.header, { borderBottomColor: surfaceColor }]}>
 				<TouchableOpacity onPress={() => router.back()}>
-					<IconSymbol name="chevron.left" size={24} color={textColor}/>
+					<IconSymbol name="chevron.left" size={24} color={textColor} />
 				</TouchableOpacity>
 				<ThemedText type="subtitle">Editar Questionário</ThemedText>
 				<TouchableOpacity onPress={handleSave}>
-					<ThemedText style={{color: primaryColor, fontWeight: 'bold'}}>Salvar</ThemedText>
+					<ThemedText style={{ color: primaryColor, fontWeight: 'bold' }}>Salvar</ThemedText>
 				</TouchableOpacity>
 			</View>
 
@@ -184,7 +360,7 @@ export default function EditQuestionnaireScreen() {
 					<Switch
 						value={isShared}
 						onValueChange={setIsShared}
-						trackColor={{false: '#767577', true: primaryColor}}
+						trackColor={{ false: '#767577', true: primaryColor }}
 						thumbColor={isShared ? '#fff' : '#f4f3f4'}
 					/>
 				</View>
@@ -195,126 +371,21 @@ export default function EditQuestionnaireScreen() {
 				<View style={styles.questionsHeader}>
 					<ThemedText style={styles.label}>Perguntas</ThemedText>
 					<TouchableOpacity onPress={openAddModal}>
-						<ThemedText style={{color: primaryColor, fontWeight: 'bold'}}>+ Adicionar</ThemedText>
+						<ThemedText style={{ color: primaryColor, fontWeight: 'bold' }}>+ Adicionar</ThemedText>
 					</TouchableOpacity>
 				</View>
 
-				{questions.map((q, index) => (
-					<Card key={index} style={styles.questionCard}>
-						<View style={styles.questionHeader}>
-							<ThemedText type="defaultSemiBold" style={{flex: 1}}>{index + 1}. {q.title}</ThemedText>
-							
-							<View style={styles.actionButtons}>
-								<TouchableOpacity 
-									style={[styles.iconButton, {backgroundColor: warningColor + '20'}]} 
-									onPress={() => openEditModal(index)}
-								>
-									<IconSymbol name="edit" size={18} color={warningColor}/>
-								</TouchableOpacity>
-								
-								<TouchableOpacity 
-									style={[styles.iconButton, {backgroundColor: errorColor + '20'}]} 
-									onPress={() => removeQuestion(index)}
-								>
-									<IconSymbol name="trash" size={18} color={errorColor}/>
-								</TouchableOpacity>
-							</View>
-						</View>
-						<ThemedText
-							style={{color: primaryColor, fontSize: 12, textTransform: 'uppercase', marginBottom: 4}}>
-							Tipo: {q.type}
-						</ThemedText>
-						{q?.data?.length > 0 && (
-							<ThemedText style={styles.questionOptions}>Opções: {q.data.join(', ')}</ThemedText>
-						)}
-					</Card>
-				))}
+				{questions.map(renderQuestionCard)}
 
-				<View style={{height: 40}}/>
+				<View style={{ height: DIMENSIONS.BOTTOM_SPACING }} />
 			</ScrollView>
 
-			<Modal
-				visible={modalVisible}
-				animationType="slide"
-				transparent={true}
-				onRequestClose={closeModal}
-			>
-				<View style={styles.modalContainer}>
-					<ThemedView style={styles.modalContent}>
-						<ThemedText type="subtitle" style={styles.modalTitle}>
-							{editingIndex !== null ? 'Editar Pergunta' : 'Nova Pergunta'}
-						</ThemedText>
-
-						<ThemedText style={styles.label}>Pergunta</ThemedText>
-						<GlassInput
-							placeholder="Digite a pergunta"
-							value={newQuestionTitle}
-							onChangeText={setNewQuestionTitle}
-						/>
-
-						<ThemedText style={styles.label}>Tipo de Resposta</ThemedText>
-						<View style={styles.typeSelector}>
-							{(['text', 'select', 'radio', 'checkbox'] as const).map((type) => (
-								<TouchableOpacity
-									key={type}
-									style={[
-										styles.typeButton,
-										{borderColor: surfaceColor},
-										newQuestionType === type && {
-											backgroundColor: primaryColor,
-											borderColor: primaryColor
-										}
-									]}
-									onPress={() => setNewQuestionType(type)}
-								>
-									<ThemedText style={[
-										styles.typeButtonText,
-										newQuestionType === type && {color: '#fff'}
-									]}>
-										{type === 'text' ? 'Texto' :
-											type === 'select' ? 'Seleção' :
-												type === 'radio' ? 'Única' : 'Múltipla'}
-									</ThemedText>
-								</TouchableOpacity>
-							))}
-						</View>
-
-						{newQuestionType !== 'text' && (
-							<>
-								<ThemedText style={styles.label}>Opções (separadas por vírgula)</ThemedText>
-								<GlassInput
-									placeholder="Opção 1, Opção 2, Opção 3"
-									value={newQuestionOptions}
-									onChangeText={setNewQuestionOptions}
-									multiline
-									style={{height: 80, textAlignVertical: 'top'}}
-								/>
-							</>
-						)}
-
-						<View style={styles.modalButtons}>
-							<TouchableOpacity
-								style={[styles.modalButton, {borderColor: surfaceColor, borderWidth: 1}]}
-								onPress={closeModal}
-							>
-								<ThemedText>Cancelar</ThemedText>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={[styles.modalButton, {backgroundColor: primaryColor}]}
-								onPress={handleAddOrUpdateQuestion}
-							>
-								<ThemedText style={{color: '#fff', fontWeight: 'bold'}}>
-									{editingIndex !== null ? 'Salvar' : 'Adicionar'}
-								</ThemedText>
-							</TouchableOpacity>
-						</View>
-					</ThemedView>
-				</View>
-			</Modal>
+			{renderQuestionEditorModal()}
 		</ThemedView>
 	);
 }
 
+// Styles
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -324,7 +395,7 @@ const styles = StyleSheet.create({
 		justifyContent: 'space-between',
 		alignItems: 'center',
 		padding: 20,
-		paddingTop: 50,
+		paddingTop: DIMENSIONS.HEADER_PADDING_TOP,
 		borderBottomWidth: 1,
 	},
 	content: {
@@ -360,7 +431,7 @@ const styles = StyleSheet.create({
 		marginBottom: 8,
 	},
 	questionCard: {
-		marginBottom: 12,
+		marginBottom: DIMENSIONS.CARD_MARGIN,
 	},
 	questionHeader: {
 		flexDirection: 'row',
@@ -370,12 +441,12 @@ const styles = StyleSheet.create({
 	},
 	actionButtons: {
 		flexDirection: 'row',
-		gap: 8,
+		gap: DIMENSIONS.GAP,
 	},
 	iconButton: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
+		width: DIMENSIONS.BUTTON_SIZE,
+		height: DIMENSIONS.BUTTON_SIZE,
+		borderRadius: DIMENSIONS.BUTTON_RADIUS,
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
@@ -387,19 +458,20 @@ const styles = StyleSheet.create({
 		flex: 1,
 		justifyContent: 'center',
 		backgroundColor: 'rgba(0,0,0,0.5)',
-		padding: 20,
+		padding: DIMENSIONS.MODAL_PADDING,
 	},
 	modalContent: {
 		borderRadius: 16,
-		padding: 20,
+		padding: DIMENSIONS.MODAL_PADDING,
 	},
 	modalTitle: {
 		textAlign: 'center',
+		marginBottom: 20,
 	},
 	typeSelector: {
 		flexDirection: 'row',
 		flexWrap: 'wrap',
-		gap: 8,
+		gap: DIMENSIONS.GAP,
 		marginBottom: 16,
 	},
 	typeButton: {
@@ -416,7 +488,7 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		marginTop: 24,
-		gap: 12,
+		gap: DIMENSIONS.GAP,
 	},
 	modalButton: {
 		flex: 1,
@@ -425,3 +497,4 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 	},
 });
+

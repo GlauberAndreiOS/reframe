@@ -1,18 +1,62 @@
-import React, {useState} from 'react';
-import {ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, TouchableOpacity, View,} from 'react-native';
+import React, {useCallback, useState} from 'react';
+import {
+	ActivityIndicator,
+	KeyboardAvoidingView,
+	Platform,
+	StyleSheet,
+	TouchableOpacity,
+	View,
+} from 'react-native';
 import {useRouter} from 'expo-router';
-import {useAuth} from '@/context/AuthContext';
-import api from '@/services/api';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {useColorScheme} from '@/hooks/use-color-scheme';
-import {ThemedView} from '@/components/themed-view';
-import {ThemedText} from '@/components/themed-text';
-import {useToast} from '@/context/ToastContext';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {GlassInput} from '@/components/ui/glass-input';
-import {ReframeLogo} from '@/components/ui/reframe-logo';
-import {AnimatedEntry} from '@/components/ui/animated-entry';
+import {useAuth, useToast} from '@/context';
+import {api} from '@/services';
+import {useThemeColor, useColorScheme} from '@/hooks';
+import {
+	ThemedView,
+	ThemedText,
+	AmbientBackground,
+	GlassInput,
+	ReframeLogo,
+	AnimatedEntry,
+} from '@/components';
 
+// ============= TYPES & INTERFACES =============
+interface LoginCredentials {
+	username: string;
+	password: string;
+}
+
+interface LoginResponse {
+	token: string;
+	userType: number;
+}
+
+// ============= CONSTANTS =============
+const VALIDATION_MESSAGES = {
+	FILL_CREDENTIALS: 'Preencha usuário e senha.',
+	LOGIN_ERROR: 'Falha ao realizar login.',
+} as const;
+
+const LOGIN_ENDPOINTS = {
+	LOGIN: '/Auth/login',
+} as const;
+
+// ============= ERROR HANDLING =============
+const handleLoginError = (error: any): string => {
+	if (error.response?.data) {
+		return typeof error.response.data === 'string'
+			? error.response.data
+			: VALIDATION_MESSAGES.LOGIN_ERROR;
+	}
+	return VALIDATION_MESSAGES.LOGIN_ERROR;
+};
+
+// ============= UTILITY FUNCTIONS =============
+const validateLoginCredentials = (credentials: LoginCredentials): boolean => {
+	return !!(credentials.username && credentials.password);
+};
+
+// ============= MAIN COMPONENT =============
 export default function Login() {
 	const router = useRouter();
 	const {signIn} = useAuth();
@@ -20,39 +64,119 @@ export default function Login() {
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
-	const [username, setUsername] = useState('');
-	const [password, setPassword] = useState('');
-	const [isLoading, setIsLoading] = useState(false);
-
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const borderColor = useThemeColor({}, 'border');
 	const mutedColor = useThemeColor({}, 'muted');
 
-	const handleLogin = async () => {
-		if (!username || !password) {
-			showToast('Preencha usuário e senha.', 'error');
+	// ============= FORM STATE =============
+	const [credentials, setCredentials] = useState<LoginCredentials>({
+		username: '',
+		password: '',
+	});
+	const [isLoading, setIsLoading] = useState(false);
+
+	// ============= CREDENTIAL HANDLERS =============
+	const updateCredentials = (updates: Partial<LoginCredentials>) => {
+		setCredentials(prev => ({...prev, ...updates}));
+	};
+
+	// ============= LOGIN LOGIC =============
+	const performLogin = useCallback(() => {
+		if (!validateLoginCredentials(credentials)) {
+			showToast(VALIDATION_MESSAGES.FILL_CREDENTIALS, 'error');
 			return;
 		}
 
 		setIsLoading(true);
 
-		try {
-			const response = await api.post('/Auth/login', {
-				username,
-				password
+		api
+			.post<LoginResponse>(LOGIN_ENDPOINTS.LOGIN, credentials)
+			.then(response => {
+				const {token, userType} = response.data;
+				return signIn(token, userType, credentials.username);
+			})
+			.catch(error => {
+				console.error('Login error:', error);
+				const errorMessage = handleLoginError(error);
+				showToast(errorMessage, 'error');
+			})
+			.finally(() => {
+				setIsLoading(false);
 			});
+	}, [credentials, showToast, signIn]);
 
-			const {token, userType} = response.data;
-			await signIn(token, userType, username);
-
-		} catch (error: any) {
-			console.error('Login error:', error);
-			const errorMessage = error.response?.data || 'Falha ao realizar login.';
-			showToast(typeof errorMessage === 'string' ? errorMessage : 'Falha ao realizar login.', 'error');
-		} finally {
-			setIsLoading(false);
-		}
+	// ============= NAVIGATION HANDLERS =============
+	const handleForgotPassword = () => {
+		router.push('/(auth)/forgetpassword');
 	};
+
+	const handleSignUp = () => {
+		router.push('/(auth)/register');
+	};
+
+	// ============= RENDER COMPONENTS =============
+	const renderCredentialsForm = () => (
+		<View style={styles.inputGroup}>
+			<GlassInput
+				placeholder="Email profissional ou usuário"
+				value={credentials.username}
+				onChangeText={(text: string) => updateCredentials({username: text})}
+				autoCapitalize="none"
+				keyboardType="email-address"
+			/>
+
+			<GlassInput
+				placeholder="Senha de acesso"
+				value={credentials.password}
+				onChangeText={(text: string) => updateCredentials({password: text})}
+				secureTextEntry
+			/>
+		</View>
+	);
+
+	const renderSecondaryActions = () => (
+		<View style={[
+			styles.secondaryActionsContainer,
+			{
+				borderColor: borderColor,
+				backgroundColor: isDark ? 'rgba(255, 255, 255, 0.01)' : 'rgba(0, 0, 0, 0.01)'
+			}
+		]}>
+			<TouchableOpacity
+				style={styles.secondaryButton}
+				onPress={handleForgotPassword}
+			>
+				<ThemedText style={[styles.secondaryButtonText, {color: mutedColor}]}>
+					Esqueci minha senha
+				</ThemedText>
+			</TouchableOpacity>
+			<View style={[styles.separator, {backgroundColor: borderColor}]}/>
+			<TouchableOpacity
+				style={styles.secondaryButton}
+				onPress={handleSignUp}
+			>
+				<ThemedText style={[styles.secondaryButtonText, {color: tintColor}]}>
+					Não tenho conta
+				</ThemedText>
+			</TouchableOpacity>
+		</View>
+	);
+
+	const renderLoginButton = () => (
+		<TouchableOpacity
+			style={[styles.primaryButton, {backgroundColor: tintColor}]}
+			onPress={performLogin}
+			disabled={isLoading}
+			activeOpacity={0.8}
+		>
+			{isLoading ? (
+				<ActivityIndicator color="#FFFFFF"/>
+			) : (
+				<ThemedText style={styles.primaryButtonText}>INICIAR REESTRUTURAÇÃO</ThemedText>
+			)}
+		</TouchableOpacity>
+	);
 
 	return (
 		<ThemedView style={styles.container}>
@@ -66,59 +190,9 @@ export default function Login() {
 					<ReframeLogo/>
 
 					<View style={styles.formSection}>
-						<View style={styles.inputGroup}>
-							<GlassInput
-								placeholder="Email profissional ou usuário"
-								value={username}
-								onChangeText={setUsername}
-								autoCapitalize="none"
-								keyboardType="email-address"
-							/>
-
-							<GlassInput
-								placeholder="Senha de acesso"
-								value={password}
-								onChangeText={setPassword}
-								secureTextEntry
-							/>
-						</View>
-
-						<View style={[
-							styles.secondaryActionsContainer,
-							{
-								borderColor: borderColor,
-								backgroundColor: isDark ? 'rgba(255, 255, 255, 0.01)' : 'rgba(0, 0, 0, 0.01)'
-							}
-						]}>
-							<TouchableOpacity
-								style={styles.secondaryButton}
-								onPress={() => router.push('/(auth)/forgetpassword')}
-							>
-								<ThemedText style={[styles.secondaryButtonText, {color: mutedColor}]}>Esqueci minha
-									senha</ThemedText>
-							</TouchableOpacity>
-							<View style={[styles.separator, {backgroundColor: borderColor}]}/>
-							<TouchableOpacity
-								style={styles.secondaryButton}
-								onPress={() => router.push('/(auth)/register')}
-							>
-								<ThemedText style={[styles.secondaryButtonText, {color: tintColor}]}>Não tenho
-									conta</ThemedText>
-							</TouchableOpacity>
-						</View>
-
-						<TouchableOpacity
-							style={[styles.primaryButton, {backgroundColor: tintColor}]}
-							onPress={handleLogin}
-							disabled={isLoading}
-							activeOpacity={0.8}
-						>
-							{isLoading ? (
-								<ActivityIndicator color="#FFFFFF"/>
-							) : (
-								<ThemedText style={styles.primaryButtonText}>INICIAR REESTRUTURAÇÃO</ThemedText>
-							)}
-						</TouchableOpacity>
+						{renderCredentialsForm()}
+						{renderSecondaryActions()}
+						{renderLoginButton()}
 					</View>
 				</AnimatedEntry>
 			</KeyboardAvoidingView>
@@ -126,6 +200,7 @@ export default function Login() {
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,

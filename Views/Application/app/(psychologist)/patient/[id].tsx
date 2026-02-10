@@ -1,68 +1,173 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {ActivityIndicator, FlatList, StyleSheet, View} from 'react-native';
 import {Stack, useLocalSearchParams} from 'expo-router';
-import api from '@/services/api';
-import {ThemedText} from '@/components/themed-text';
-import {ThemedView} from '@/components/themed-view';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {useToast} from '@/context/ToastContext';
-import {useColorScheme} from '@/hooks/use-color-scheme';
-import {AnimatedEntry} from '@/components/ui/animated-entry';
-import {IconSymbol} from '@/components/ui/icon-symbol';
+import {ThemedView, ThemedText, AnimatedEntry, IconSymbol} from '@/components';
+import {useThemeColor, useColorScheme} from '@/hooks';
+import {useToast} from '@/context';
+import {api} from '@/services';
 
-interface AutomaticThought {
-    id: number;
-    date: string;
-    situation: string;
-    thought: string;
-    emotion: string;
-    behavior?: string;
-    evidencePro?: string;
-    evidenceContra?: string;
-    alternativeThoughts?: string;
-    reevaluation?: string;
+// ============= TYPES & INTERFACES =============
+interface ThoughtField {
+	key: keyof AutomaticThought;
+	label: string;
+	optional?: boolean;
 }
 
+interface AutomaticThought {
+	id: number;
+	date: string;
+	situation: string;
+	thought: string;
+	emotion: string;
+	behavior?: string;
+	evidencePro?: string;
+	evidenceContra?: string;
+	alternativeThoughts?: string;
+	reevaluation?: string;
+}
+
+// ============= CONSTANTS =============
+const API_ENDPOINTS = {
+	GET_PATIENT_THOUGHTS: '/AutomaticThought/patient',
+} as const;
+
+const MESSAGES = {
+	LOAD_ERROR: 'Não foi possível carregar os pensamentos.',
+	EMPTY_STATE: 'Nenhum pensamento registrado por este paciente.',
+	HEADER_SUBTITLE: 'Histórico de registros',
+	THOUGHTS_TITLE: 'Pensamentos de',
+} as const;
+
+const FIELD_LABELS = {
+	SITUATION: 'SITUAÇÃO',
+	THOUGHT: 'PENSAMENTO',
+	BEHAVIOR: 'COMPORTAMENTO',
+	EVIDENCE_PRO: 'EVIDÊNCIAS A FAVOR',
+	EVIDENCE_CONTRA: 'EVIDÊNCIAS CONTRA',
+	ALTERNATIVE_THOUGHTS: 'PENSAMENTOS ALTERNATIVOS',
+	REEVALUATION: 'REAVALIAÇÃO',
+} as const;
+
+const THOUGHT_FIELDS: ThoughtField[] = [
+	{key: 'situation', label: FIELD_LABELS.SITUATION},
+	{key: 'thought', label: FIELD_LABELS.THOUGHT},
+	{key: 'behavior', label: FIELD_LABELS.BEHAVIOR, optional: true},
+	{key: 'evidencePro', label: FIELD_LABELS.EVIDENCE_PRO, optional: true},
+	{key: 'evidenceContra', label: FIELD_LABELS.EVIDENCE_CONTRA, optional: true},
+	{key: 'alternativeThoughts', label: FIELD_LABELS.ALTERNATIVE_THOUGHTS, optional: true},
+	{key: 'reevaluation', label: FIELD_LABELS.REEVALUATION, optional: true},
+];
+
+const ANIMATION_DELAY_MS = 100;
+const ANIMATION_DURATION_MS = 600;
+const HEADER_SPACER_HEIGHT = 60;
+const ICON_SIZE = 48;
+const DATE_LOCALE = 'pt-BR';
+
+// ============= COMPONENT =============
 export default function PatientThoughtsScreen() {
 	const {id, name} = useLocalSearchParams();
 	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const borderColor = useThemeColor({}, 'border');
 	const cardColor = useThemeColor({}, 'card');
 	const mutedColor = useThemeColor({}, 'muted');
 
+	// ============= STATE =============
 	const [thoughts, setThoughts] = useState<AutomaticThought[]>([]);
 	const [loading, setLoading] = useState(true);
 
-	const fetchThoughts = useCallback(async () => {
-		try {
-			const response = await api.get(`/AutomaticThought/patient/${id}`);
-			setThoughts(response.data);
-		} catch (error) {
-			console.error('Failed to fetch patient thoughts:', error);
-			showToast('Não foi possível carregar os pensamentos.', 'error');
-		} finally {
-			setLoading(false);
-		}
-	}, [id, showToast]);
-
+	// ============= EFFECTS =============
 	useEffect(() => {
 		if (id) {
-			void fetchThoughts();
+			fetchThoughts();
 		}
-	}, [id, fetchThoughts]);
+	}, [id]);
 
-	const formatDate = (dateString: string) => {
+	// ============= HANDLERS =============
+	const fetchThoughts = useCallback(() => {
+		api.get(`${API_ENDPOINTS.GET_PATIENT_THOUGHTS}/${id}`)
+			.then((response) => {
+				setThoughts(response.data);
+			})
+			.catch((error) => {
+				console.error('Failed to fetch patient thoughts:', error);
+				showToast(MESSAGES.LOAD_ERROR, 'error');
+			})
+			.finally(() => {
+				setLoading(false);
+			});
+	}, [id, showToast]);
+
+	// ============= UTILITY FUNCTIONS =============
+	const formatDate = (dateString: string): string => {
 		const date = new Date(dateString);
-		return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', {
+		return `${date.toLocaleDateString(DATE_LOCALE)} às ${date.toLocaleTimeString(DATE_LOCALE, {
 			hour: '2-digit',
-			minute: '2-digit'
+			minute: '2-digit',
 		})}`;
 	};
 
+
+	// ============= RENDER FUNCTIONS =============
+	const renderThoughtField = (thought: AutomaticThought, field: ThoughtField) => {
+		const value = thought[field.key];
+
+		if (!value) {
+			return null;
+		}
+
+		return (
+			<View key={field.key} style={styles.section}>
+				<ThemedText style={[styles.label, {color: mutedColor}]}>
+					{field.label}
+				</ThemedText>
+				<ThemedText style={styles.content}>{value}</ThemedText>
+			</View>
+		);
+	};
+
+	const renderThoughtCard = (item: AutomaticThought, index: number) => (
+		<AnimatedEntry delay={index * ANIMATION_DELAY_MS} duration={ANIMATION_DURATION_MS}>
+			<View
+				style={[
+					styles.card,
+					{
+						backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+						borderColor: borderColor,
+					},
+				]}
+			>
+				<View style={styles.cardHeader}>
+					<ThemedText style={[styles.date, {color: mutedColor}]}>
+						{formatDate(item.date)}
+					</ThemedText>
+					<View style={[styles.emotionBadge, {backgroundColor: tintColor + '20'}]}>
+						<ThemedText style={[styles.emotion, {color: tintColor}]}>
+							{item.emotion}
+						</ThemedText>
+					</View>
+				</View>
+
+				{THOUGHT_FIELDS.map((field) => renderThoughtField(item, field))}
+			</View>
+		</AnimatedEntry>
+	);
+
+	const renderEmptyComponent = () => (
+		<View style={styles.center}>
+			<IconSymbol name="doc.text" size={ICON_SIZE} color={mutedColor}/>
+			<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
+				{MESSAGES.EMPTY_STATE}
+			</ThemedText>
+		</View>
+	);
+
+	// ============= RENDER =============
 	return (
 		<ThemedView style={styles.container}>
 			<Stack.Screen
@@ -78,9 +183,11 @@ export default function PatientThoughtsScreen() {
 			<View style={styles.headerSpacer}/>
 
 			<View style={styles.header}>
-				<ThemedText type="title">Pensamentos de {name}</ThemedText>
+				<ThemedText type="title">
+					{MESSAGES.THOUGHTS_TITLE} {name}
+				</ThemedText>
 				<ThemedText style={{color: mutedColor, fontSize: 14}}>
-					Histórico de registros
+					{MESSAGES.HEADER_SUBTITLE}
 				</ThemedText>
 			</View>
 
@@ -94,97 +201,22 @@ export default function PatientThoughtsScreen() {
 					keyExtractor={(item) => item.id.toString()}
 					contentContainerStyle={styles.list}
 					showsVerticalScrollIndicator={false}
-					ListEmptyComponent={
-						<View style={styles.center}>
-							<IconSymbol name="doc.text" size={48} color={mutedColor}/>
-							<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
-								Nenhum pensamento registrado por este paciente.
-							</ThemedText>
-						</View>
-					}
-					renderItem={({item, index}) => (
-						<AnimatedEntry delay={index * 100} duration={600}>
-							<View style={[
-								styles.card,
-								{
-									backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-									borderColor: borderColor
-								}
-							]}>
-								<View style={styles.cardHeader}>
-									<ThemedText style={[styles.date, {color: mutedColor}]}>
-										{formatDate(item.date)}
-									</ThemedText>
-									<View style={[styles.emotionBadge, {backgroundColor: tintColor + '20'}]}>
-										<ThemedText style={[styles.emotion, {color: tintColor}]}>
-											{item.emotion}
-										</ThemedText>
-									</View>
-								</View>
-
-								<View style={styles.section}>
-									<ThemedText style={[styles.label, {color: mutedColor}]}>SITUAÇÃO</ThemedText>
-									<ThemedText style={styles.content}>{item.situation}</ThemedText>
-								</View>
-
-								<View style={styles.section}>
-									<ThemedText style={[styles.label, {color: mutedColor}]}>PENSAMENTO</ThemedText>
-									<ThemedText style={styles.content}>{item.thought}</ThemedText>
-								</View>
-
-								{!!item.behavior && (
-									<View style={styles.section}>
-										<ThemedText
-											style={[styles.label, {color: mutedColor}]}>COMPORTAMENTO</ThemedText>
-										<ThemedText style={styles.content}>{item.behavior}</ThemedText>
-									</View>
-								)}
-
-								{!!item.evidencePro && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, {color: mutedColor}]}>EVIDÊNCIAS A
-											FAVOR</ThemedText>
-										<ThemedText style={styles.content}>{item.evidencePro}</ThemedText>
-									</View>
-								)}
-
-								{!!item.evidenceContra && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, {color: mutedColor}]}>EVIDÊNCIAS
-											CONTRA</ThemedText>
-										<ThemedText style={styles.content}>{item.evidenceContra}</ThemedText>
-									</View>
-								)}
-
-								{!!item.alternativeThoughts && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, {color: mutedColor}]}>PENSAMENTOS
-											ALTERNATIVOS</ThemedText>
-										<ThemedText style={styles.content}>{item.alternativeThoughts}</ThemedText>
-									</View>
-								)}
-
-								{!!item.reevaluation && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, {color: mutedColor}]}>REAVALIAÇÃO</ThemedText>
-										<ThemedText style={styles.content}>{item.reevaluation}</ThemedText>
-									</View>
-								)}
-							</View>
-						</AnimatedEntry>
-					)}
+					ListEmptyComponent={renderEmptyComponent}
+					renderItem={({item, index}) => renderThoughtCard(item, index)}
 				/>
 			)}
 		</ThemedView>
 	);
 }
 
+
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 	},
 	headerSpacer: {
-		height: 60,
+		height: HEADER_SPACER_HEIGHT,
 	},
 	header: {
 		paddingHorizontal: 24,

@@ -1,90 +1,143 @@
 import React, {useEffect, useState} from 'react';
 import {ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View} from 'react-native';
 import {useLocalSearchParams, useRouter} from 'expo-router';
-import {useAuth} from '@/context/AuthContext';
-import api from '@/services/api';
-import {ThemedView} from '@/components/themed-view';
-import {ThemedText} from '@/components/themed-text';
-import {Card} from '@/components/ui/card';
-import {IconSymbol} from '@/components/ui/icon-symbol';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {Toast, ToastType} from '@/components/ui/toast';
+import {ThemedView, ThemedText, Card, IconSymbol, AmbientBackground, Toast} from '@/components';
+import {useThemeColor} from '@/hooks';
+import {useAuth} from '@/context';
+import {api} from '@/services';
 
+// ============= TYPES & INTERFACES =============
 interface Question {
-    title: string;
-    type: 'text' | 'select' | 'radio' | 'checkbox';
-    data: string[];
+	title: string;
+	type: 'text' | 'select' | 'radio' | 'checkbox';
+	data: string[];
 }
 
 interface Template {
-    id: string;
-    title: string;
-    description: string;
-    category: string;
-    questions: Question[];
-    isGlobal: boolean;
+	id: string;
+	title: string;
+	description: string;
+	category: string;
+	questions: Question[];
+	isGlobal: boolean;
 }
 
+interface ToastState {
+	message: string;
+	type: 'success' | 'error';
+}
+
+// ============= CONSTANTS =============
+const API_ENDPOINTS = {
+	GET_TEMPLATES: '/Questionnaire/Templates',
+	COPY_TEMPLATE: '/Questionnaire/CopyTemplate',
+} as const;
+
+const MESSAGES = {
+	LOAD_ERROR: 'Não foi possível carregar o modelo.',
+	NOT_FOUND: 'Modelo não encontrado.',
+	COPY_SUCCESS: 'Modelo copiado com sucesso!',
+	COPY_ERROR: 'Erro ao copiar o modelo.',
+	COPY_BUTTON: 'Copiar para Meus Questionários',
+	LABEL_TYPE: 'Tipo:',
+	LABEL_OPTIONS: 'Opções:',
+} as const;
+
+const TOAST_DURATION_MS = 3000;
+const REDIRECT_DELAY_MS = 1000;
+const COLOR_DANGER = '#EF4444';
+const BUTTON_ICON_SIZE = 20;
+const BUTTON_ICON_MARGIN = 12;
+const QUESTION_CARD_MARGIN = 16;
+
+// ============= COMPONENT =============
 export default function TemplateDetailScreen() {
 	const {id} = useLocalSearchParams();
 	const router = useRouter();
 	const {token} = useAuth();
-	const [template, setTemplate] = useState<Template | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [toast, setToast] = useState<{message: string, type: ToastType} | null>(null);
 
+	// ============= THEME COLORS =============
 	const primaryColor = useThemeColor({}, 'tint');
 	const textColor = useThemeColor({}, 'text');
 	const surfaceColor = useThemeColor({}, 'surface');
 
+	// ============= STATE =============
+	const [template, setTemplate] = useState<Template | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [toast, setToast] = useState<ToastState | null>(null);
+
+	// ============= EFFECTS =============
 	useEffect(() => {
 		if (toast) {
 			const timer = setTimeout(() => {
 				setToast(null);
-			}, 3000);
+			}, TOAST_DURATION_MS);
 			return () => clearTimeout(timer);
 		}
 	}, [toast]);
 
 	useEffect(() => {
-		const fetchTemplate = async () => {
-			try {
-				// We need a new endpoint to get a single template by ID
-				// For now, I'll fetch all and find the one. This is inefficient.
-				const response = await api.get('/Questionnaire/Templates', {
-					headers: {Authorization: `Bearer ${token}`}
-				});
-				const foundTemplate = response.data.find((t: Template) => t.id === id);
-				setTemplate(foundTemplate);
-			} catch (error) {
-				console.error('Error fetching template:', error);
-				setToast({message: 'Não foi possível carregar o modelo.', type: 'error'});
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		if (id) fetchTemplate();
+		if (id) {
+			fetchTemplate();
+		}
 	}, [id, token]);
 
-	const handleCopyTemplate = async () => {
-		if (!template) return;
-
-		try {
-			await api.post(`/Questionnaire/CopyTemplate/${template.id}`, {}, {
-				headers: {Authorization: `Bearer ${token}`}
+	// ============= HANDLERS =============
+	const fetchTemplate = () => {
+		api.get(API_ENDPOINTS.GET_TEMPLATES, {
+			headers: {Authorization: `Bearer ${token}`},
+		})
+			.then((response) => {
+				const foundTemplate = response.data.find((t: Template) => t.id === id);
+				setTemplate(foundTemplate);
+			})
+			.catch((error) => {
+				console.error('Error fetching template:', error);
+				setToast({message: MESSAGES.LOAD_ERROR, type: 'error'});
+			})
+			.finally(() => {
+				setLoading(false);
 			});
-			setToast({message: 'Modelo copiado com sucesso!', type: 'success'});
-			setTimeout(() => {
-				router.push('/(psychologist)/(tabs)/questionnaires');
-			}, 1000);
-		} catch (error) {
-			console.error('Error copying template:', error);
-			setToast({message: 'Erro ao copiar o modelo.', type: 'error'});
-		}
 	};
 
+	const handleCopyTemplate = () => {
+		if (!template) {
+			return;
+		}
+
+		api.post(`${API_ENDPOINTS.COPY_TEMPLATE}/${template.id}`, {}, {
+			headers: {Authorization: `Bearer ${token}`},
+		})
+			.then(() => {
+				setToast({message: MESSAGES.COPY_SUCCESS, type: 'success'});
+				setTimeout(() => {
+					router.push('/(psychologist)/(tabs)/questionnaires');
+				}, REDIRECT_DELAY_MS);
+			})
+			.catch((error) => {
+				console.error('Error copying template:', error);
+				setToast({message: MESSAGES.COPY_ERROR, type: 'error'});
+			});
+	};
+
+	// ============= RENDER FUNCTIONS =============
+	const renderQuestionCard = (question: Question, index: number) => (
+		<Card key={index} style={styles.card}>
+			<ThemedText type="defaultSemiBold" style={styles.questionTitle}>
+				{index + 1}. {question.title}
+			</ThemedText>
+			<ThemedText style={[styles.questionType, {color: primaryColor}]}>
+				{MESSAGES.LABEL_TYPE} {question.type}
+			</ThemedText>
+			{question.data && question.data.length > 0 && (
+				<ThemedText style={styles.questionOptions}>
+					{MESSAGES.LABEL_OPTIONS} {question.data.join(', ')}
+				</ThemedText>
+			)}
+		</Card>
+	);
+
+	// ============= RENDER =============
 	if (loading) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
@@ -96,15 +149,16 @@ export default function TemplateDetailScreen() {
 	if (!template) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
-				<ThemedText style={{color: '#EF4444'}}>Modelo não encontrado.</ThemedText>
+				<ThemedText style={{color: COLOR_DANGER}}>{MESSAGES.NOT_FOUND}</ThemedText>
 			</ThemedView>
 		);
 	}
 
 	return (
 		<ThemedView style={styles.container}>
-			{toast && <Toast message={toast.message} type={toast.type} />}
+			{toast && <Toast message={toast.message} type={toast.type}/>}
 			<AmbientBackground/>
+
 			<View style={[styles.header, {borderBottomColor: surfaceColor}]}>
 				<TouchableOpacity onPress={() => router.back()}>
 					<IconSymbol name="chevron.left" size={24} color={textColor}/>
@@ -121,31 +175,17 @@ export default function TemplateDetailScreen() {
 			</View>
 
 			<ScrollView style={styles.content}>
-				{template.questions.map((q, index) => (
-					<Card key={index} style={styles.card}>
-						<ThemedText type="defaultSemiBold"
-							style={styles.questionTitle}>{index + 1}. {q.title}</ThemedText>
-						<ThemedText style={{
-							color: primaryColor,
-							fontSize: 12,
-							textTransform: 'uppercase',
-							marginBottom: 4
-						}}>
-							Tipo: {q.type}
-						</ThemedText>
-						{q.data && q.data.length > 0 && (
-							<ThemedText style={styles.questionOptions}>Opções: {q.data.join(', ')}</ThemedText>
-						)}
-					</Card>
-				))}
-				
+				{template.questions.map((q, index) => renderQuestionCard(q, index))}
+
 				<View style={styles.copyButtonContainer}>
 					<TouchableOpacity
 						style={[styles.copyButton, {backgroundColor: primaryColor}]}
 						onPress={handleCopyTemplate}
 					>
-						<IconSymbol name="doc.on.doc" size={20} color="#fff"/>
-						<ThemedText style={styles.copyButtonText}>Copiar para Meus Questionários</ThemedText>
+						<IconSymbol name="doc.on.doc" size={BUTTON_ICON_SIZE} color="#fff"/>
+						<ThemedText style={styles.copyButtonText}>
+							{MESSAGES.COPY_BUTTON}
+						</ThemedText>
 					</TouchableOpacity>
 				</View>
 				<View style={{height: 80}}/>
@@ -154,6 +194,7 @@ export default function TemplateDetailScreen() {
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -180,10 +221,15 @@ const styles = StyleSheet.create({
 		padding: 20,
 	},
 	card: {
-		marginBottom: 16,
+		marginBottom: QUESTION_CARD_MARGIN,
 	},
 	questionTitle: {
 		marginBottom: 12,
+	},
+	questionType: {
+		fontSize: 12,
+		textTransform: 'uppercase',
+		marginBottom: 4,
 	},
 	questionOptions: {
 		fontSize: 12,
@@ -210,6 +256,6 @@ const styles = StyleSheet.create({
 		color: '#fff',
 		fontSize: 16,
 		fontWeight: 'bold',
-		marginLeft: 12,
+		marginLeft: BUTTON_ICON_MARGIN,
 	},
 });

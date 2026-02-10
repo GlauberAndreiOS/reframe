@@ -1,5 +1,6 @@
-import {AnimatedSplashScreen} from '@/components/ui/animated-splash-screen';
+import {AnimatedSplashScreen} from '@/components';
 
-export default function Index() {
+// ============= SPLASH SCREEN COMPONENT =============
+export default function SplashScreen() {
 	return <AnimatedSplashScreen/>;
 }

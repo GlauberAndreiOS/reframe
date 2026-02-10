@@ -1,34 +1,60 @@
 import {Tabs} from 'expo-router';
-import FloatingTabs from "@/components/floating-tabs";
-import {IconSymbol} from '@/components/ui/icon-symbol';
+import {FloatingTabsComponent, IconSymbol} from '@/components';
 
+// ============= CONSTANTS =============
+const TAB_SCREEN_NAMES = {
+	HOME: 'index',
+	QUESTIONNAIRES: 'questionnaires',
+	AGENDA: 'agenda',
+	PROFILE: 'profile',
+} as const;
+
+const TAB_SCREENS = [
+	{
+		name: TAB_SCREEN_NAMES.HOME,
+		title: 'Home',
+		icon: 'house.fill',
+	},
+	{
+		name: TAB_SCREEN_NAMES.QUESTIONNAIRES,
+		title: 'Questionários',
+		icon: 'doc.text.fill',
+	},
+	{
+		name: TAB_SCREEN_NAMES.AGENDA,
+		title: 'Agenda',
+		icon: 'calendar-month',
+	},
+	{
+		name: TAB_SCREEN_NAMES.PROFILE,
+		title: 'Perfil',
+		icon: 'person.fill',
+	},
+] as const;
+
+const TABS_OPTIONS = {
+	headerShown: false,
+} as const;
+
+// ============= PATIENT TABS LAYOUT COMPONENT =============
 export default function TabsPatientLayout() {
 	return (
 		<Tabs
-			screenOptions={{headerShown: false}}
-			tabBar={(props) => <FloatingTabs {...props} />}
+			screenOptions={TABS_OPTIONS}
+			tabBar={(props) => <FloatingTabsComponent {...props}/>}
 		>
-			<Tabs.Screen
-				name="index"
-				options={{
-					title: 'Home',
-					tabBarIcon: ({color}) => <IconSymbol name="house.fill" size={24} color={color}/>,
-				}}
-			/>
-			<Tabs.Screen
-				name="questionnaires"
-				options={{
-					title: 'Questionários',
-					tabBarIcon: ({color}) => <IconSymbol name="doc.text.fill" size={24} color={color}/>,
-				}}
-			/>
-			<Tabs.Screen
-				name="profile"
-				options={{
-					title: 'Perfil',
-					tabBarIcon: ({color}) => <IconSymbol name="person.fill" size={24} color={color}/>,
-				}}
-			/>
+			{TAB_SCREENS.map((screen) => (
+				<Tabs.Screen
+					key={screen.name}
+					name={screen.name}
+					options={{
+						title: screen.title,
+						tabBarIcon: ({color}) => (
+							<IconSymbol name={screen.icon} size={24} color={color}/>
+						),
+					}}
+				/>
+			))}
 		</Tabs>
 	);
 }

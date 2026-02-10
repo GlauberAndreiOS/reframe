@@ -1,74 +1,130 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {ActivityIndicator, StyleSheet, TouchableOpacity, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useAuth} from '@/context/AuthContext';
-import api from '@/services/api';
-import {ThemedText} from '@/components/themed-text';
-import {ThemedView} from '@/components/themed-view';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {useToast} from '@/context/ToastContext';
-import {AnimatedEntry} from '@/components/ui/animated-entry';
-import {IconSymbol} from '@/components/ui/icon-symbol';
-import {useColorScheme} from '@/hooks/use-color-scheme';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {Avatar} from '@/components/ui/avatar';
+import {ThemedText, ThemedView, AnimatedEntry, IconSymbol, AmbientBackground, Avatar} from '@/components';
+import {useAuth, useToast} from '@/context';
+import {useThemeColor, useColorScheme} from '@/hooks';
+import {api} from '@/services';
 
+// ============= TYPES & INTERFACES =============
 interface PsychologistProfile {
-    id: number;
-    name: string;
-    crp: string;
-    email: string;
-    profilePictureUrl?: string;
+	id: number;
+	name: string;
+	crp: string;
+	email: string;
+	profilePictureUrl?: string;
 }
 
+// ============= CONSTANTS =============
+const API_ENDPOINTS = {
+	GET_PROFILE: '/Psychologist/profile',
+	UPLOAD_PICTURE: '/Profile/upload-picture',
+} as const;
+
+const MESSAGES = {
+	LOAD_ERROR: 'Não foi possível carregar o perfil.',
+	UPLOAD_SUCCESS: 'Foto de perfil atualizada!',
+	UPLOAD_ERROR: 'Erro ao atualizar foto.',
+	LOGOUT: 'Sair da conta',
+	SECTION_TITLE: 'INFORMAÇÕES PROFISSIONAIS',
+	LABEL_CRP: 'CRP',
+	LABEL_EMAIL: 'Email',
+} as const;
+
+const ICON_BOX_SIZE = 40;
+const ICON_BOX_RADIUS = 12;
+const DIVIDER_MARGIN_LEFT = 72;
+
+// ============= COMPONENT =============
 export default function ProfileScreen() {
 	const {signOut, token} = useAuth();
 	const {showToast} = useToast();
-	const [profile, setProfile] = useState<PsychologistProfile | null>(null);
-	const [loading, setLoading] = useState(true);
-
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const borderColor = useThemeColor({}, 'border');
 	const mutedColor = useThemeColor({}, 'muted');
 	const cardColor = useThemeColor({}, 'card');
 
-	const fetchProfile = useCallback(async () => {
-		try {
-			const response = await api.get('/Psychologist/profile');
-			setProfile(response.data);
-		} catch (error) {
-			console.error('Failed to fetch profile:', error);
-			showToast('Não foi possível carregar o perfil.', 'error');
-		} finally {
-			setLoading(false);
-		}
-	}, [showToast]);
+	// ============= STATE =============
+	const [profile, setProfile] = useState<PsychologistProfile | null>(null);
+	const [loading, setLoading] = useState(true);
 
+	// ============= EFFECTS =============
 	useEffect(() => {
 		fetchProfile();
-	}, [fetchProfile]);
+	}, []);
 
-	const handleUpload = async (formData: any) => {
-		try {
-			const response = await api.post('/Profile/upload-picture', formData, {
-				headers: {
-					'Content-Type': 'multipart/form-data',
-					Authorization: `Bearer ${token}`
-				},
+	// ============= HANDLERS =============
+	const fetchProfile = useCallback(() => {
+		api.get(API_ENDPOINTS.GET_PROFILE)
+			.then((response) => {
+				setProfile(response.data);
+			})
+			.catch((error) => {
+				console.error('Failed to fetch profile:', error);
+				showToast(MESSAGES.LOAD_ERROR, 'error');
+			})
+			.finally(() => {
+				setLoading(false);
 			});
-            
-			if (profile) {
-				setProfile({...profile, profilePictureUrl: response.data.url});
-			}
-			showToast('Foto de perfil atualizada!', 'success');
-		} catch (error) {
-			console.error('Upload error:', error);
-			showToast('Erro ao atualizar foto.', 'error');
-		}
+	}, [showToast]);
+
+	const handleUpload = (formData: any) => {
+		api.post(API_ENDPOINTS.UPLOAD_PICTURE, formData, {
+			headers: {
+				'Content-Type': 'multipart/form-data',
+				Authorization: `Bearer ${token}`,
+			},
+		})
+			.then((response) => {
+				if (profile) {
+					setProfile({...profile, profilePictureUrl: response.data.url});
+				}
+				showToast(MESSAGES.UPLOAD_SUCCESS, 'success');
+			})
+			.catch((error) => {
+				console.error('Upload error:', error);
+				showToast(MESSAGES.UPLOAD_ERROR, 'error');
+			});
 	};
+
+	// ============= RENDER FUNCTIONS =============
+	const renderProfessionalInfo = () => (
+		<View
+			style={[
+				styles.card,
+				{
+					backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+					borderColor: borderColor,
+				},
+			]}
+		>
+			<View style={styles.infoRow}>
+				<View style={[styles.iconBox, {backgroundColor: tintColor + '15'}]}>
+					<IconSymbol name="doc.text.fill" size={18} color={tintColor}/>
+				</View>
+				<View>
+					<ThemedText style={styles.label}>{MESSAGES.LABEL_CRP}</ThemedText>
+					<ThemedText style={styles.value}>{profile?.crp}</ThemedText>
+				</View>
+			</View>
+
+			<View style={[styles.divider, {backgroundColor: borderColor}]}/>
+
+			<View style={styles.infoRow}>
+				<View style={[styles.iconBox, {backgroundColor: tintColor + '15'}]}>
+					<IconSymbol name="envelope.fill" size={18} color={tintColor}/>
+				</View>
+				<View>
+					<ThemedText style={styles.label}>{MESSAGES.LABEL_EMAIL}</ThemedText>
+					<ThemedText style={styles.value}>{profile?.email}</ThemedText>
+				</View>
+			</View>
+		</View>
+	);
 
 	if (loading) {
 		return (
@@ -78,6 +134,7 @@ export default function ProfileScreen() {
 		);
 	}
 
+	// ============= RENDER =============
 	return (
 		<ThemedView style={styles.container}>
 			<AmbientBackground/>
@@ -85,55 +142,24 @@ export default function ProfileScreen() {
 				<AnimatedEntry style={styles.content}>
 					<View style={styles.header}>
 						<View style={{marginBottom: 16}}>
-							<Avatar 
-								uri={profile?.profilePictureUrl} 
-								size={100} 
+							<Avatar
+								uri={profile?.profilePictureUrl}
+								size={100}
 								editable={true}
 								onUpload={handleUpload}
 								name={profile?.name}
 							/>
 						</View>
-						<ThemedText
-							type="title"
-							style={styles.name}
-							numberOfLines={1}
-						>
+						<ThemedText type="title" style={styles.name} numberOfLines={1}>
 							{profile?.name}
 						</ThemedText>
 					</View>
 
 					<View style={styles.section}>
-						<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>INFORMAÇÕES
-							PROFISSIONAIS</ThemedText>
-						<View style={[
-							styles.card,
-							{
-								backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-								borderColor: borderColor
-							}
-						]}>
-							<View style={styles.infoRow}>
-								<View style={[styles.iconBox, {backgroundColor: tintColor + '15'}]}>
-									<IconSymbol name="doc.text.fill" size={18} color={tintColor}/>
-								</View>
-								<View>
-									<ThemedText style={styles.label}>CRP</ThemedText>
-									<ThemedText style={styles.value}>{profile?.crp}</ThemedText>
-								</View>
-							</View>
-
-							<View style={[styles.divider, {backgroundColor: borderColor}]}/>
-
-							<View style={styles.infoRow}>
-								<View style={[styles.iconBox, {backgroundColor: tintColor + '15'}]}>
-									<IconSymbol name="envelope.fill" size={18} color={tintColor}/>
-								</View>
-								<View>
-									<ThemedText style={styles.label}>Email</ThemedText>
-									<ThemedText style={styles.value}>{profile?.email}</ThemedText>
-								</View>
-							</View>
-						</View>
+						<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>
+							{MESSAGES.SECTION_TITLE}
+						</ThemedText>
+						{renderProfessionalInfo()}
 					</View>
 
 					<TouchableOpacity
@@ -141,7 +167,7 @@ export default function ProfileScreen() {
 						onPress={signOut}
 					>
 						<IconSymbol name="arrow.right.square" size={20} color="#EF4444"/>
-						<ThemedText style={styles.logoutText}>Sair da conta</ThemedText>
+						<ThemedText style={styles.logoutText}>{MESSAGES.LOGOUT}</ThemedText>
 					</TouchableOpacity>
 				</AnimatedEntry>
 			</SafeAreaView>
@@ -149,6 +175,7 @@ export default function ProfileScreen() {
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -194,9 +221,9 @@ const styles = StyleSheet.create({
 		gap: 16,
 	},
 	iconBox: {
-		width: 40,
-		height: 40,
-		borderRadius: 12,
+		width: ICON_BOX_SIZE,
+		height: ICON_BOX_SIZE,
+		borderRadius: ICON_BOX_RADIUS,
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
@@ -212,7 +239,7 @@ const styles = StyleSheet.create({
 	divider: {
 		height: 1,
 		opacity: 0.5,
-		marginLeft: 72,
+		marginLeft: DIVIDER_MARGIN_LEFT,
 	},
 	logoutButton: {
 		flexDirection: 'row',

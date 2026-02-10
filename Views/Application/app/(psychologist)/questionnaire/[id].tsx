@@ -1,121 +1,321 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {ActivityIndicator, FlatList, ScrollView, StyleSheet, TouchableOpacity, View} from 'react-native';
 import {useLocalSearchParams, useRouter} from 'expo-router';
-import {useAuth} from '@/context/AuthContext';
-import api from '@/services/api';
-import {ThemedView} from '@/components/themed-view';
-import {ThemedText} from '@/components/themed-text';
-import {Card} from '@/components/ui/card';
-import {IconSymbol} from '@/components/ui/icon-symbol';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {Toast, ToastType} from '@/components/ui/toast';
-import {ConfirmModal} from '@/components/ui/confirm-modal';
+import {ThemedView, ThemedText, Card, IconSymbol, AmbientBackground, Toast, ConfirmModal} from '@/components';
+import {useAuth} from '@/context';
+import {useThemeColor} from '@/hooks';
+import {api} from '@/services';
+
+// ============= TYPES & INTERFACES =============
+interface Question {
+	title: string;
+	type: 'text' | 'select' | 'radio' | 'checkbox';
+	data: string[];
+}
 
 interface Questionnaire {
-    id: string;
-    title: string;
-    createdAt: string;
-    targetPatientName?: string;
-    questions: {
-        title: string;
-        type: string;
-        data: string[];
-    }[];
+	id: string;
+	title: string;
+	createdAt: string;
+	targetPatientName?: string;
+	questions: Question[];
 }
 
 interface Application {
-    patientId: string;
-    patientName: string;
-    isApplied: boolean;
-    hasResponded: boolean;
-    submittedAt?: string;
-    responseId?: string;
+	patientId: string;
+	patientName: string;
+	isApplied: boolean;
+	hasResponded: boolean;
+	submittedAt?: string;
+	responseId?: string;
 }
 
+interface ToastState {
+	message: string;
+	type: 'success' | 'error';
+}
+
+// ============= CONSTANTS =============
+const API_ENDPOINTS = {
+	GET_QUESTIONNAIRE: '/Questionnaire',
+	GET_APPLICATIONS: '/Questionnaire/Applications',
+	DELETE_QUESTIONNAIRE: '/Questionnaire',
+	APPLY_QUESTIONNAIRE: '/Questionnaire/Apply',
+} as const;
+
+const MESSAGES = {
+	LOAD_ERROR: 'Não foi possível carregar os detalhes.',
+	DELETE_SUCCESS: 'Questionário excluído com sucesso.',
+	DELETE_ERROR: 'Erro ao excluir o questionário.',
+	DELETE_TITLE: 'Excluir Questionário',
+	DELETE_MESSAGE: 'Tem certeza que deseja excluir este questionário? Todas as respostas associadas também serão excluídas.',
+	APPLY_SUCCESS: 'Questionário aplicado com sucesso!',
+	APPLY_ERROR: 'Erro ao aplicar o questionário.',
+	NOT_FOUND: 'Questionário não encontrado.',
+	TAB_DETAILS: 'Detalhes',
+	TAB_APPLICATIONS: 'Aplicações',
+	SECTION_QUESTIONS: 'Perguntas',
+	EMPTY_PATIENTS: 'Nenhum paciente encontrado.',
+	BUTTON_VIEW_RESPONSE: 'Ver Resposta',
+	BUTTON_APPLY: 'Aplicar',
+	LABEL_TYPE: 'Tipo:',
+	LABEL_OPTIONS: 'Opções:',
+} as const;
+
+const TAB_NAMES = {
+	DETAILS: 'details',
+	APPLICATIONS: 'applications',
+} as const;
+
+const STATUS_COLORS = {
+	NOT_APPLIED: '#999999',
+	APPLIED_PENDING: '#3B82F6',
+	APPLIED_RESPONDED: '#10B981',
+	DANGER: '#EF4444',
+	WARNING: '#F59E0B',
+} as const;
+
+const STATUS_LABELS = {
+	NOT_APPLIED: 'Não aplicado',
+	APPLIED_PENDING: 'Aguardando resposta',
+	APPLIED_RESPONDED: 'Respondido',
+} as const;
+
+const TOAST_DURATION_MS = 3000;
+const REDIRECT_DELAY_MS = 1000;
+const SEPARATOR_HEIGHT = 24;
+const SEPARATOR_MARGIN = 8;
+const ACTION_BUTTON_SIZE = 32;
+const ACTION_BUTTON_RADIUS = 16;
+
+// ============= COMPONENT =============
 export default function QuestionnaireDetailScreen() {
 	const {id} = useLocalSearchParams();
 	const router = useRouter();
 	const {token} = useAuth();
-	const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
-	const [applications, setApplications] = useState<Application[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [activeTab, setActiveTab] = useState<'details' | 'applications'>('details');
-	const [toast, setToast] = useState<{message: string, type: ToastType} | null>(null);
-	const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
+	// ============= THEME COLORS =============
 	const primaryColor = useThemeColor({}, 'tint');
 	const textColor = useThemeColor({}, 'text');
 	const surfaceColor = useThemeColor({}, 'surface');
 	const borderColor = useThemeColor({}, 'border');
-	const dangerColor = '#EF4444';
-	const successColor = '#10B981';
-	const infoColor = '#3B82F6';
-	const warningColor = '#F59E0B';
 
+	// ============= STATE =============
+	const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
+	const [applications, setApplications] = useState<Application[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [activeTab, setActiveTab] = useState<typeof TAB_NAMES.DETAILS | typeof TAB_NAMES.APPLICATIONS>(
+		TAB_NAMES.DETAILS,
+	);
+	const [toast, setToast] = useState<ToastState | null>(null);
+	const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+
+	// ============= EFFECTS =============
 	useEffect(() => {
 		if (toast) {
 			const timer = setTimeout(() => {
 				setToast(null);
-			}, 3000);
+			}, TOAST_DURATION_MS);
 			return () => clearTimeout(timer);
 		}
 	}, [toast]);
 
-	const fetchData = useCallback(async () => {
-		try {
-			const [qRes, aRes] = await Promise.all([
-				api.get(`/Questionnaire/${id}`, {headers: {Authorization: `Bearer ${token}`}}),
-				api.get(`/Questionnaire/Applications/${id}`, {headers: {Authorization: `Bearer ${token}`}})
-			]);
-			setQuestionnaire(qRes.data);
-			setApplications(aRes.data);
-		} catch (error) {
-			console.error('Error fetching data:', error);
-			setToast({message: 'Não foi possível carregar os detalhes.', type: 'error'});
-		} finally {
-			setLoading(false);
+	useEffect(() => {
+		if (id) {
+			fetchData();
 		}
 	}, [id, token]);
 
-	useEffect(() => {
-		if (id) fetchData();
-	}, [id, fetchData]);
-
-	const handleDelete = async () => {
-		try {
-			await api.delete(`/Questionnaire/${id}`, {
-				headers: {Authorization: `Bearer ${token}`}
+	// ============= HANDLERS =============
+	const fetchData = useCallback(() => {
+		Promise.all([
+			api.get(`${API_ENDPOINTS.GET_QUESTIONNAIRE}/${id}`, {
+				headers: {Authorization: `Bearer ${token}`},
+			}),
+			api.get(`${API_ENDPOINTS.GET_APPLICATIONS}/${id}`, {
+				headers: {Authorization: `Bearer ${token}`},
+			}),
+		])
+			.then(([qRes, aRes]) => {
+				setQuestionnaire(qRes.data);
+				setApplications(aRes.data);
+			})
+			.catch((error) => {
+				console.error('Error fetching data:', error);
+				setToast({message: MESSAGES.LOAD_ERROR, type: 'error'});
+			})
+			.finally(() => {
+				setLoading(false);
 			});
-			setToast({message: 'Questionário excluído com sucesso.', type: 'success'});
-			setDeleteModalVisible(false);
-			setTimeout(() => {
-				router.back();
-			}, 1000);
-		} catch (error) {
-			console.error('Error deleting questionnaire:', error);
-			setToast({message: 'Erro ao excluir o questionário.', type: 'error'});
-			setDeleteModalVisible(false);
-		}
+	}, [id, token]);
+
+	const handleDelete = () => {
+		api.delete(`${API_ENDPOINTS.DELETE_QUESTIONNAIRE}/${id}`, {
+			headers: {Authorization: `Bearer ${token}`},
+		})
+			.then(() => {
+				setToast({message: MESSAGES.DELETE_SUCCESS, type: 'success'});
+				setDeleteModalVisible(false);
+				setTimeout(() => {
+					router.back();
+				}, REDIRECT_DELAY_MS);
+			})
+			.catch((error) => {
+				console.error('Error deleting questionnaire:', error);
+				setToast({message: MESSAGES.DELETE_ERROR, type: 'error'});
+				setDeleteModalVisible(false);
+			});
 	};
 
-	const handleApply = async (patientId: string) => {
-		try {
-			await api.post(`/Questionnaire/Apply/${id}/${patientId}`, {}, {
-				headers: {Authorization: `Bearer ${token}`}
+	const handleApply = (patientId: string) => {
+		api.post(`${API_ENDPOINTS.APPLY_QUESTIONNAIRE}/${id}/${patientId}`, {}, {
+			headers: {Authorization: `Bearer ${token}`},
+		})
+			.then(() => {
+				setToast({message: MESSAGES.APPLY_SUCCESS, type: 'success'});
+				fetchData();
+			})
+			.catch((error) => {
+				console.error('Error applying questionnaire:', error);
+				setToast({message: MESSAGES.APPLY_ERROR, type: 'error'});
 			});
-			setToast({message: 'Questionário aplicado com sucesso!', type: 'success'});
-			fetchData(); // Refresh list
-		} catch (error) {
-			console.error('Error applying questionnaire:', error);
-			setToast({message: 'Erro ao aplicar o questionário.', type: 'error'});
-		}
 	};
 
 	const handleViewResponse = (responseId: string) => {
 		router.push(`/(psychologist)/questionnaire/response/${responseId}`);
 	};
 
+	// ============= RENDER FUNCTIONS =============
+	const renderQuestionCard = (question: Question, index: number) => (
+		<Card key={index} style={styles.card}>
+			<ThemedText type="defaultSemiBold" style={styles.questionTitle}>
+				{index + 1}. {question.title}
+			</ThemedText>
+			<ThemedText style={[styles.questionType, {color: primaryColor}]}>
+				{MESSAGES.LABEL_TYPE} {question.type}
+			</ThemedText>
+			{question.data && question.data.length > 0 && (
+				<ThemedText style={styles.questionOptions}>
+					{MESSAGES.LABEL_OPTIONS} {question.data.join(', ')}
+				</ThemedText>
+			)}
+		</Card>
+	);
+
+	const getApplicationStatus = (application: Application) => {
+		if (!application.isApplied) {
+			return {color: STATUS_COLORS.NOT_APPLIED, label: STATUS_LABELS.NOT_APPLIED};
+		}
+		if (application.hasResponded) {
+			return {color: STATUS_COLORS.APPLIED_RESPONDED, label: STATUS_LABELS.APPLIED_RESPONDED};
+		}
+		return {color: STATUS_COLORS.APPLIED_PENDING, label: STATUS_LABELS.APPLIED_PENDING};
+	};
+
+	const renderApplicationActionButton = (application: Application) => {
+		if (!application.isApplied) {
+			return (
+				<TouchableOpacity
+					style={[styles.applyButton, {backgroundColor: primaryColor}]}
+					onPress={() => handleApply(application.patientId)}
+				>
+					<ThemedText style={styles.applyButtonText}>{MESSAGES.BUTTON_APPLY}</ThemedText>
+				</TouchableOpacity>
+			);
+		}
+
+		if (application.hasResponded) {
+			return (
+				<TouchableOpacity
+					style={[styles.viewResponseButton, {backgroundColor: STATUS_COLORS.APPLIED_PENDING}]}
+					onPress={() => application.responseId && handleViewResponse(application.responseId)}
+				>
+					<ThemedText style={styles.applyButtonText}>{MESSAGES.BUTTON_VIEW_RESPONSE}</ThemedText>
+				</TouchableOpacity>
+			);
+		}
+
+		return (
+			<View style={styles.appliedBadge}>
+				<IconSymbol name="checkmark" size={16} color={STATUS_COLORS.APPLIED_PENDING}/>
+			</View>
+		);
+	};
+
+	const renderApplicationItem = ({item}: {item: Application}) => {
+		const status = getApplicationStatus(item);
+
+		return (
+			<Card style={[styles.applicationCard, {borderLeftColor: status.color, borderLeftWidth: 4}]}>
+				<View style={styles.applicationInfo}>
+					<ThemedText type="defaultSemiBold">{item.patientName}</ThemedText>
+					<ThemedText style={[styles.applicationStatus, {color: status.color}]}>
+						{status.label}
+						{item.submittedAt ? ` em ${new Date(item.submittedAt).toLocaleDateString('pt-BR')}` : ''}
+					</ThemedText>
+				</View>
+				{renderApplicationActionButton(item)}
+			</Card>
+		);
+	};
+
+	const renderDetailsTab = () => (
+		<ScrollView style={styles.content}>
+			<ThemedText type="defaultSemiBold" style={styles.sectionTitle}>
+				{MESSAGES.SECTION_QUESTIONS}
+			</ThemedText>
+			{questionnaire?.questions.map((q, index) => renderQuestionCard(q, index))}
+			<View style={{height: 80}}/>
+		</ScrollView>
+	);
+
+	const renderApplicationsTab = () => (
+		<FlatList
+			data={applications}
+			renderItem={renderApplicationItem}
+			keyExtractor={(item) => item.patientId}
+			contentContainerStyle={styles.listContent}
+			ListEmptyComponent={<ThemedText style={styles.emptyText}>{MESSAGES.EMPTY_PATIENTS}</ThemedText>}
+		/>
+	);
+
+	const renderHeaderActions = () => (
+		<View style={styles.headerActions}>
+			<TouchableOpacity
+				style={[styles.actionIconButton, {backgroundColor: STATUS_COLORS.WARNING}]}
+				onPress={() => router.push(`/(psychologist)/questionnaire/edit/${id}`)}
+			>
+				<IconSymbol name="edit" size={16} color="#fff"/>
+			</TouchableOpacity>
+			<TouchableOpacity
+				style={[styles.actionIconButton, {backgroundColor: STATUS_COLORS.DANGER}]}
+				onPress={() => setDeleteModalVisible(true)}
+			>
+				<IconSymbol name="trash" size={16} color="#fff"/>
+			</TouchableOpacity>
+		</View>
+	);
+
+	const renderTabButton = (tabName: typeof TAB_NAMES.DETAILS | typeof TAB_NAMES.APPLICATIONS, label: string) => (
+		<TouchableOpacity
+			style={[
+				styles.tab,
+				activeTab === tabName && {borderBottomColor: primaryColor, borderBottomWidth: 2},
+			]}
+			onPress={() => setActiveTab(tabName)}
+		>
+			<ThemedText
+				style={[
+					styles.tabText,
+					activeTab === tabName && {color: primaryColor, fontWeight: '600'},
+				]}
+			>
+				{label}
+			</ThemedText>
+		</TouchableOpacity>
+	);
+
+	// ============= RENDER =============
 	if (loading) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
@@ -127,162 +327,44 @@ export default function QuestionnaireDetailScreen() {
 	if (!questionnaire) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
-				<ThemedText style={{color: '#EF4444'}}>Questionário não encontrado.</ThemedText>
+				<ThemedText style={{color: STATUS_COLORS.DANGER}}>{MESSAGES.NOT_FOUND}</ThemedText>
 			</ThemedView>
 		);
 	}
 
-	const renderApplicationItem = ({item}: { item: Application }) => {
-		let statusColor = borderColor;
-		let statusText = 'Não aplicado';
-		let actionButton = null;
-
-		if (item.isApplied) {
-			if (item.hasResponded) {
-				statusColor = successColor;
-				statusText = 'Respondido';
-				actionButton = (
-					<TouchableOpacity
-						style={[styles.viewResponseButton, {backgroundColor: infoColor}]}
-						onPress={() => item.responseId && handleViewResponse(item.responseId)}
-					>
-						<ThemedText style={styles.applyButtonText}>Ver Resposta</ThemedText>
-					</TouchableOpacity>
-				);
-			} else {
-				statusColor = infoColor;
-				statusText = 'Aguardando resposta';
-				actionButton = (
-					<View style={styles.appliedBadge}>
-						<IconSymbol name="checkmark" size={16} color={statusColor}/>
-					</View>
-				);
-			}
-		} else {
-			actionButton = (
-				<TouchableOpacity
-					style={[styles.applyButton, {backgroundColor: primaryColor}]}
-					onPress={() => handleApply(item.patientId)}
-				>
-					<ThemedText style={styles.applyButtonText}>Aplicar</ThemedText>
-				</TouchableOpacity>
-			);
-		}
-
-		return (
-			<Card style={[styles.applicationCard, {borderLeftColor: statusColor, borderLeftWidth: 4}]}>
-				<View style={styles.applicationInfo}>
-					<ThemedText type="defaultSemiBold">{item.patientName}</ThemedText>
-					<ThemedText style={{fontSize: 12, color: statusColor, marginTop: 2}}>
-						{statusText} {item.submittedAt ? `em ${new Date(item.submittedAt).toLocaleDateString()}` : ''}
-					</ThemedText>
-				</View>
-				{actionButton}
-			</Card>
-		);
-	};
-
 	return (
 		<ThemedView style={styles.container}>
-			{toast && <Toast message={toast.message} type={toast.type} />}
+			{toast && <Toast message={toast.message} type={toast.type}/>}
 			<AmbientBackground/>
+
 			<View style={[styles.header, {borderBottomColor: surfaceColor}]}>
 				<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
 					<IconSymbol name="chevron.left" size={24} color={textColor}/>
 				</TouchableOpacity>
-				
-				<View style={styles.separator} />
-				
-				<ThemedText type="subtitle" style={styles.headerTitle}>
+
+				<View style={[styles.separator, {backgroundColor: borderColor}]}/>
+
+				<ThemedText type="subtitle" style={styles.headerTitle} numberOfLines={1}>
 					{questionnaire.title}
 				</ThemedText>
-				
-				<View style={styles.separator} />
-				
-				<View style={styles.headerActions}>
-					<TouchableOpacity 
-						style={[styles.actionIconButton, {backgroundColor: warningColor}]}
-						onPress={() => router.push(`/(psychologist)/questionnaire/edit/${id}`)}
-					>
-						<IconSymbol name="edit" size={16} color="#fff"/>
-					</TouchableOpacity>
-					<TouchableOpacity 
-						style={[styles.actionIconButton, {backgroundColor: dangerColor}]}
-						onPress={() => setDeleteModalVisible(true)}
-					>
-						<IconSymbol name="trash" size={16} color="#fff"/>
-					</TouchableOpacity>
-				</View>
+
+				<View style={[styles.separator, {backgroundColor: borderColor}]}/>
+
+				{renderHeaderActions()}
 			</View>
 
 			<View style={[styles.tabs, {borderBottomColor: borderColor}]}>
-				<TouchableOpacity
-					style={[styles.tab, activeTab === 'details' && {
-						borderBottomColor: primaryColor,
-						borderBottomWidth: 2
-					}]}
-					onPress={() => setActiveTab('details')}
-				>
-					<ThemedText style={[
-						styles.tabText,
-						activeTab === 'details' && {color: primaryColor, fontWeight: '600'}
-					]}>Detalhes</ThemedText>
-				</TouchableOpacity>
-				<TouchableOpacity
-					style={[styles.tab, activeTab === 'applications' && {
-						borderBottomColor: primaryColor,
-						borderBottomWidth: 2
-					}]}
-					onPress={() => setActiveTab('applications')}
-				>
-					<ThemedText style={[
-						styles.tabText,
-						activeTab === 'applications' && {color: primaryColor, fontWeight: '600'}
-					]}>
-						Aplicações
-					</ThemedText>
-				</TouchableOpacity>
+				{renderTabButton(TAB_NAMES.DETAILS, MESSAGES.TAB_DETAILS)}
+				{renderTabButton(TAB_NAMES.APPLICATIONS, MESSAGES.TAB_APPLICATIONS)}
 			</View>
 
-			{activeTab === 'details' ? (
-				<ScrollView style={styles.content}>
-					<ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Perguntas</ThemedText>
-					{questionnaire.questions.map((q, index) => (
-						<Card key={index} style={styles.card}>
-							<ThemedText type="defaultSemiBold"
-								style={styles.questionTitle}>{index + 1}. {q.title}</ThemedText>
-							<ThemedText style={{
-								color: primaryColor,
-								fontSize: 12,
-								textTransform: 'uppercase',
-								marginBottom: 4
-							}}>
-								Tipo: {q.type}
-							</ThemedText>
-							{q.data && q.data.length > 0 && (
-								<ThemedText style={styles.questionOptions}>Opções: {q.data.join(', ')}</ThemedText>
-							)}
-						</Card>
-					))}
-					<View style={{height: 80}}/>
-				</ScrollView>
-			) : (
-				<FlatList
-					data={applications}
-					renderItem={renderApplicationItem}
-					keyExtractor={(item) => item.patientId}
-					contentContainerStyle={styles.listContent}
-					ListEmptyComponent={
-						<ThemedText style={styles.emptyText}>Nenhum paciente encontrado.</ThemedText>
-					}
-				/>
-			)}
+			{activeTab === TAB_NAMES.DETAILS ? renderDetailsTab() : renderApplicationsTab()}
 
 			<ConfirmModal
 				visible={deleteModalVisible}
-				title="Excluir Questionário"
-				message="Tem certeza que deseja excluir este questionário? Todas as respostas associadas também serão excluídas."
-				confirmText="Excluir"
+				title={MESSAGES.DELETE_TITLE}
+				message={MESSAGES.DELETE_MESSAGE}
+				confirmText={MESSAGES.DELETE_TITLE}
 				isDestructive={true}
 				onConfirm={handleDelete}
 				onCancel={() => setDeleteModalVisible(false)}
@@ -291,6 +373,7 @@ export default function QuestionnaireDetailScreen() {
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -322,14 +405,13 @@ const styles = StyleSheet.create({
 	},
 	separator: {
 		width: 1,
-		height: 24,
-		backgroundColor: 'rgba(150, 150, 150, 0.2)',
-		marginHorizontal: 8,
+		height: SEPARATOR_HEIGHT,
+		marginHorizontal: SEPARATOR_MARGIN,
 	},
 	actionIconButton: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
+		width: ACTION_BUTTON_SIZE,
+		height: ACTION_BUTTON_SIZE,
+		borderRadius: ACTION_BUTTON_RADIUS,
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
@@ -362,6 +444,11 @@ const styles = StyleSheet.create({
 	questionTitle: {
 		marginBottom: 4,
 	},
+	questionType: {
+		fontSize: 12,
+		textTransform: 'uppercase',
+		marginBottom: 4,
+	},
 	questionOptions: {
 		fontSize: 12,
 		opacity: 0.6,
@@ -381,6 +468,10 @@ const styles = StyleSheet.create({
 	},
 	applicationInfo: {
 		flex: 1,
+	},
+	applicationStatus: {
+		fontSize: 12,
+		marginTop: 2,
 	},
 	applyButton: {
 		paddingHorizontal: 16,

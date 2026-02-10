@@ -5,10 +5,8 @@ const app = JSON.parse(fs.readFileSync('app.json'));
 
 app.expo.version = pkg.version;
 
-
 app.expo.android = app.expo.android || {};
 app.expo.android.versionCode = (app.expo.android.versionCode || 0) + 1;
-
 
 app.expo.ios = app.expo.ios || {};
 app.expo.ios.buildNumber = pkg.version;

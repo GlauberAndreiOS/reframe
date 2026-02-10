@@ -1,6 +1,7 @@
 # .NET / Rider
 bin/
 obj/
+artifacts/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
@@ -29,6 +30,8 @@ web-build/
 # Se você customizar o código nativo, remova estas linhas
 android/
 ios/
+Views/Application/android/
+Views/Application/ios/
 *.apk
 *.aab
 

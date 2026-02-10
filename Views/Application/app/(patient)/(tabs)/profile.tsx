@@ -1,98 +1,162 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {ActivityIndicator, StyleSheet, TouchableOpacity, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useAuth} from '@/context/AuthContext';
-import api from '@/services/api';
-import {ThemedText} from '@/components/themed-text';
-import {ThemedView} from '@/components/themed-view';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {useToast} from '@/context/ToastContext';
-import {AnimatedEntry} from '@/components/ui/animated-entry';
-import {IconSymbol} from '@/components/ui/icon-symbol';
-import {useColorScheme} from '@/hooks/use-color-scheme';
-import {PsychologistPickerModal} from '@/components/ui/psychologist-picker-modal';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {Avatar} from '@/components/ui/avatar';
+import {ThemedText, ThemedView, AnimatedEntry, IconSymbol, PsychologistPickerModal, AmbientBackground, Avatar} from '@/components';
+import {useAuth, useToast} from '@/context';
+import {useThemeColor, useColorScheme} from '@/hooks';
+import {api} from '@/services';
 
+// ============= TYPES & INTERFACES =============
 interface PatientProfile {
-    id: number;
-    name: string;
-    profilePictureUrl?: string;
-    psychologist?: {
-        id: number;
-        name: string;
-        crp: string;
-        profilePictureUrl?: string;
-    };
+	id: number;
+	name: string;
+	profilePictureUrl?: string;
+	psychologist?: {
+		id: number;
+		name: string;
+		crp: string;
+		profilePictureUrl?: string;
+	};
 }
 
+// ============= CONSTANTS =============
+const API_ENDPOINTS = {
+	GET_PROFILE: '/Patient/profile',
+	UPLOAD_PICTURE: '/Profile/upload-picture',
+	UPDATE_PSYCHOLOGIST: '/Patient/psychologist',
+} as const;
+
+const MESSAGES = {
+	LOAD_ERROR: 'Não foi possível carregar o perfil.',
+	UPLOAD_SUCCESS: 'Foto de perfil atualizada!',
+	UPLOAD_ERROR: 'Erro ao atualizar foto.',
+	LINK_REMOVED: 'Vínculo removido com sucesso!',
+	LINK_UPDATED: 'Vínculo atualizado com sucesso!',
+	LINK_ERROR: 'Falha ao atualizar vínculo.',
+	NO_PSYCHOLOGIST: 'Nenhum psicólogo vinculado',
+	LOGOUT: 'Sair da conta',
+	SECTION_TITLE: 'PSICÓLOGO VINCULADO',
+} as const;
+
+// ============= COMPONENT =============
 export default function ProfileScreen() {
 	const {signOut, token} = useAuth();
 	const {showToast} = useToast();
-	const [profile, setProfile] = useState<PatientProfile | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [isPickerVisible, setIsPickerVisible] = useState(false);
-
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const borderColor = useThemeColor({}, 'border');
 	const mutedColor = useThemeColor({}, 'muted');
 	const cardColor = useThemeColor({}, 'card');
 
-	const fetchProfile = useCallback(async () => {
-		try {
-			const response = await api.get('/Patient/profile');
-			setProfile(response.data);
-		} catch (error) {
-			console.error('Failed to fetch profile:', error);
-			showToast('Não foi possível carregar o perfil.', 'error');
-		} finally {
-			setLoading(false);
-		}
-	}, [showToast]);
+	// ============= STATE =============
+	const [profile, setProfile] = useState<PatientProfile | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [isPickerVisible, setIsPickerVisible] = useState(false);
 
+	// ============= EFFECTS =============
 	useEffect(() => {
 		fetchProfile();
-	}, [fetchProfile]);
+	}, []);
 
-	const handleUpload = async (formData: any) => {
-		try {
-			const response = await api.post('/Profile/upload-picture', formData, {
-				headers: {
-					'Content-Type': 'multipart/form-data',
-					Authorization: `Bearer ${token}`
-				},
+	// ============= HANDLERS =============
+	const fetchProfile = useCallback(() => {
+		api.get(API_ENDPOINTS.GET_PROFILE)
+			.then((response) => {
+				setProfile(response.data);
+			})
+			.catch((error) => {
+				console.error('Failed to fetch profile:', error);
+				showToast(MESSAGES.LOAD_ERROR, 'error');
+			})
+			.finally(() => {
+				setLoading(false);
 			});
-            
-			if (profile) {
-				setProfile({...profile, profilePictureUrl: response.data.url});
-			}
-			showToast('Foto de perfil atualizada!', 'success');
-		} catch (error) {
-			console.error('Upload error:', error);
-			showToast('Erro ao atualizar foto.', 'error');
-		}
+	}, [showToast]);
+
+	const handleUpload = (formData: any) => {
+		api.post(API_ENDPOINTS.UPLOAD_PICTURE, formData, {
+			headers: {
+				'Content-Type': 'multipart/form-data',
+				Authorization: `Bearer ${token}`,
+			},
+		})
+			.then((response) => {
+				if (profile) {
+					setProfile({...profile, profilePictureUrl: response.data.url});
+				}
+				showToast(MESSAGES.UPLOAD_SUCCESS, 'success');
+			})
+			.catch((error) => {
+				console.error('Upload error:', error);
+				showToast(MESSAGES.UPLOAD_ERROR, 'error');
+			});
 	};
 
-	const handleUpdatePsychologist = async (psychologistId: number | null) => {
-		console.log('Updating psychologist link to:', psychologistId);
+	const handleUpdatePsychologist = (psychologistId: number | null) => {
 		setIsPickerVisible(false);
-		try {
-			await api.put('/Patient/psychologist', {psychologistId});
 
-			if (psychologistId === null) {
-				showToast('Vínculo removido com sucesso!', 'success');
-			} else {
-				showToast('Vínculo atualizado com sucesso!', 'success');
-			}
+		api.put(API_ENDPOINTS.UPDATE_PSYCHOLOGIST, {psychologistId})
+			.then(() => {
+				const message = psychologistId === null ? MESSAGES.LINK_REMOVED : MESSAGES.LINK_UPDATED;
+				showToast(message, 'success');
+				fetchProfile();
+			})
+			.catch((error) => {
+				console.error('Failed to update psychologist:', error);
+				showToast(MESSAGES.LINK_ERROR, 'error');
+			});
+	};
 
-			fetchProfile();
-		} catch (error) {
-			console.error('Failed to update psychologist:', error);
-			showToast('Falha ao atualizar vínculo.', 'error');
+	// ============= RENDER FUNCTIONS =============
+	const renderPsychologistInfo = () => {
+		if (profile?.psychologist) {
+			return (
+				<View style={styles.psychologistContainer}>
+					<View style={styles.psychologistInfo}>
+						<View style={{marginRight: 12}}>
+							<Avatar
+								uri={profile.psychologist.profilePictureUrl}
+								size={40}
+								editable={false}
+								name={profile.psychologist.name}
+							/>
+						</View>
+						<View style={{flex: 1}}>
+							<ThemedText style={styles.psychologistName} numberOfLines={1}>
+								{profile.psychologist.name}
+							</ThemedText>
+							<ThemedText style={[styles.crp, {color: mutedColor}]}>
+								CRP: {profile.psychologist.crp}
+							</ThemedText>
+						</View>
+					</View>
+
+					<TouchableOpacity
+						onPress={() => setIsPickerVisible(true)}
+						style={[styles.iconButton, {backgroundColor: tintColor + '15'}]}
+					>
+						<IconSymbol name="arrow.2.squarepath" size={20} color={tintColor}/>
+					</TouchableOpacity>
+				</View>
+			);
 		}
+
+		return (
+			<View style={styles.emptyStateContainer}>
+				<ThemedText style={{color: mutedColor, fontStyle: 'italic', flex: 1}}>
+					{MESSAGES.NO_PSYCHOLOGIST}
+				</ThemedText>
+				<TouchableOpacity
+					onPress={() => setIsPickerVisible(true)}
+					style={[styles.iconButton, {backgroundColor: tintColor + '15'}]}
+				>
+					<IconSymbol name="plus" size={20} color={tintColor}/>
+				</TouchableOpacity>
+			</View>
+		);
 	};
 
 	if (loading) {
@@ -110,77 +174,34 @@ export default function ProfileScreen() {
 				<AnimatedEntry style={styles.content}>
 					<View style={styles.header}>
 						<View style={{marginBottom: 16}}>
-							<Avatar 
-								uri={profile?.profilePictureUrl} 
-								size={100} 
+							<Avatar
+								uri={profile?.profilePictureUrl}
+								size={100}
 								editable={true}
 								onUpload={handleUpload}
 								name={profile?.name}
 							/>
 						</View>
-						<ThemedText
-							type="title"
-							style={styles.name}
-							numberOfLines={1}
-						>
+						<ThemedText type="title" style={styles.name} numberOfLines={1}>
 							{profile?.name}
 						</ThemedText>
 					</View>
 
 					<View style={styles.section}>
-						<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>PSICÓLOGO VINCULADO</ThemedText>
+						<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>
+							{MESSAGES.SECTION_TITLE}
+						</ThemedText>
 
-						<View style={[
-							styles.card,
-							{
-								backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-								borderColor: borderColor
-							}
-						]}>
-							{profile?.psychologist ? (
-								<View style={styles.psychologistContainer}>
-									<View style={styles.psychologistInfo}>
-										<View style={{marginRight: 12}}>
-											<Avatar 
-												uri={profile.psychologist.profilePictureUrl} 
-												size={40} 
-												editable={false}
-												name={profile.psychologist.name}
-											/>
-										</View>
-										<View style={{flex: 1}}>
-											<ThemedText
-												style={styles.psychologistName}
-												numberOfLines={1}
-											>
-												{profile.psychologist.name}
-											</ThemedText>
-											<ThemedText style={[styles.crp, {color: mutedColor}]}>
-												CRP: {profile.psychologist.crp}
-											</ThemedText>
-										</View>
-									</View>
-
-									<TouchableOpacity
-										onPress={() => setIsPickerVisible(true)}
-										style={[styles.iconButton, {backgroundColor: tintColor + '15'}]}
-									>
-										<IconSymbol name="arrow.2.squarepath" size={20} color={tintColor}/>
-									</TouchableOpacity>
-								</View>
-							) : (
-								<View style={styles.emptyStateContainer}>
-									<ThemedText style={{color: mutedColor, fontStyle: 'italic', flex: 1}}>
-										Nenhum psicólogo vinculado
-									</ThemedText>
-									<TouchableOpacity
-										onPress={() => setIsPickerVisible(true)}
-										style={[styles.iconButton, {backgroundColor: tintColor + '15'}]}
-									>
-										<IconSymbol name="plus" size={20} color={tintColor}/>
-									</TouchableOpacity>
-								</View>
-							)}
+						<View
+							style={[
+								styles.card,
+								{
+									backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+									borderColor: borderColor,
+								},
+							]}
+						>
+							{renderPsychologistInfo()}
 						</View>
 					</View>
 
@@ -189,7 +210,7 @@ export default function ProfileScreen() {
 						onPress={signOut}
 					>
 						<IconSymbol name="arrow.right.square" size={20} color="#EF4444"/>
-						<ThemedText style={styles.logoutText}>Sair da conta</ThemedText>
+						<ThemedText style={styles.logoutText}>{MESSAGES.LOGOUT}</ThemedText>
 					</TouchableOpacity>
 				</AnimatedEntry>
 
@@ -204,6 +225,7 @@ export default function ProfileScreen() {
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,

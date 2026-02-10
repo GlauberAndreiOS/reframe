@@ -1,60 +1,113 @@
-import React, { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View, } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AnimatedEntry } from '@/components/ui/animated-entry';
-import { useThoughts } from '@/hooks/(patient)/thoughts.hooks';
-import { useToast } from '@/context/ToastContext';
-import { ConfirmModal } from '@/components/ui/confirm-modal';
-import { AmbientBackground } from '@/components/ui/ambient-background';
+import React, {useCallback, useState} from 'react';
+import {FlatList, RefreshControl, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useFocusEffect, useRouter} from 'expo-router';
+import {ThemedView, ThemedText, AnimatedEntry, IconSymbol, ConfirmModal, AmbientBackground} from '@/components';
+import {useThemeColor, useColorScheme} from '@/hooks';
+import {useToast} from '@/context';
+import {useThoughts} from '@/hooks/(patient)/thoughts.hooks';
 
+// ============= TYPES & INTERFACES =============
+interface ThoughtItem {
+	id: string;
+	date: string;
+	situation: string;
+	thought: string;
+	emotion: string;
+	behavior?: string;
+	evidencePro?: string;
+	evidenceContra?: string;
+	alternativeThoughts?: string;
+	reevaluation?: string;
+	synced: number;
+}
+
+interface SyncStatus {
+	isSyncing: boolean;
+	hasFailed: boolean;
+}
+
+// ============= CONSTANTS =============
+const MESSAGES = {
+	DELETE_SUCCESS: 'Pensamento excluído com sucesso.',
+	DELETE_ERROR: 'Erro ao excluir o pensamento.',
+	EMPTY_TITLE: 'Nenhum pensamento registrado ainda.',
+	EMPTY_ACTION: 'Registrar meu primeiro pensamento',
+	MODAL_TITLE: 'Excluir Pensamento',
+	MODAL_MESSAGE: 'Tem certeza de que deseja excluir este registro? Esta ação não pode ser desfeita.',
+} as const;
+
+const SYNC_STATUS = {
+	UNSYNCED: 0,
+	FAILED: -1,
+} as const;
+
+const FIELD_LABELS = {
+	SITUATION: 'SITUAÇÃO',
+	THOUGHT: 'PENSAMENTO',
+	BEHAVIOR: 'COMPORTAMENTO',
+	EVIDENCE_PRO: 'EVIDÊNCIAS A FAVOR',
+	EVIDENCE_CONTRA: 'EVIDÊNCIAS CONTRA',
+	ALTERNATIVE: 'PENSAMENTOS ALTERNATIVOS',
+	REEVALUATION: 'REAVALIAÇÃO',
+} as const;
+
+const DATE_FORMAT_OPTIONS = {
+	year: 'numeric' as const,
+	month: '2-digit' as const,
+	day: '2-digit' as const,
+	hour: '2-digit' as const,
+	minute: '2-digit' as const,
+};
+
+// ============= COMPONENT =============
 export default function ThoughtsScreen() {
 	const router = useRouter();
-	const { showToast } = useToast();
+	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const cardColor = useThemeColor({}, 'card');
 	const borderColor = useThemeColor({}, 'border');
 	const mutedColor = useThemeColor({}, 'muted');
 	const dangerColor = useThemeColor({}, 'danger');
 
-	const { data: thoughts, isSyncing, hasFailedSync, syncWithBackend, deleteThought } = useThoughts();
+	const {data: thoughts, isSyncing, hasFailedSync, syncWithBackend, deleteThought} = useThoughts();
 
+	// ============= STATE =============
 	const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 	const [thoughtToDelete, setThoughtToDelete] = useState<string | null>(null);
 
+	// ============= EFFECTS =============
 	useFocusEffect(
 		useCallback(() => {
 			void syncWithBackend();
-			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, [])
 	);
 
+	// ============= HANDLERS =============
 	const handleDelete = (id: string) => {
 		setThoughtToDelete(id);
 		setDeleteModalVisible(true);
 	};
 
-	const confirmDelete = async () => {
+	const confirmDelete = () => {
 		if (!thoughtToDelete) return;
 
-		try {
-			await deleteThought(thoughtToDelete);
-			showToast('Pensamento excluído com sucesso.', 'success');
-		} catch (error) {
-			showToast('Erro ao excluir o pensamento.', 'error');
-			console.error(error);
-		} finally {
-			setDeleteModalVisible(false);
-			setThoughtToDelete(null);
-		}
+		deleteThought(thoughtToDelete)
+			.then(() => {
+				showToast(MESSAGES.DELETE_SUCCESS, 'success');
+			})
+			.catch((error) => {
+				console.error('Error deleting thought:', error);
+				showToast(MESSAGES.DELETE_ERROR, 'error');
+			})
+			.finally(() => {
+				setDeleteModalVisible(false);
+				setThoughtToDelete(null);
+			});
 	};
 
 	const cancelDelete = () => {
@@ -62,52 +115,130 @@ export default function ThoughtsScreen() {
 		setThoughtToDelete(null);
 	};
 
-	const formatDate = (dateString: string) => {
-		const date = new Date(dateString);
-		return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', {
-			hour: '2-digit',
-			minute: '2-digit'
-		})}`;
+	// ============= UTILITY FUNCTIONS =============
+	const formatDate = (dateString: string): string => {
+		try {
+			return new Date(dateString).toLocaleDateString('pt-BR', DATE_FORMAT_OPTIONS);
+		} catch {
+			return dateString;
+		}
 	};
 
-	return (
-		<ThemedView style={styles.container}>
-			<AmbientBackground />
-			<SafeAreaView style={styles.safeArea}>
-				<View style={styles.header}>
-					<View>
-						<ThemedText type="title">Meus Pensamentos</ThemedText>
-						<ThemedText style={{ color: mutedColor, fontSize: 14 }}>
-							Registro diário de emoções
-						</ThemedText>
-					</View>
+	const renderOptionalField = (label: string, content?: string) => {
+		if (!content) return null;
 
-					<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-						{hasFailedSync && (
-							<TouchableOpacity
-								onPress={syncWithBackend}
-								style={styles.addButton}
-								disabled={isSyncing}
-							>
-								<IconSymbol
-									name="arrow.clockwise.circle.fill"
-									size={28}
-									color={dangerColor}
-								/>
-							</TouchableOpacity>
+		return (
+			<View style={styles.section}>
+				<ThemedText style={[styles.label, {color: mutedColor}]}>{label}</ThemedText>
+				<ThemedText style={styles.content}>{content}</ThemedText>
+			</View>
+		);
+	};
+
+	// ============= RENDER FUNCTIONS =============
+	const renderThoughtCard = ({item, index}: {item: ThoughtItem; index: number}) => (
+		<AnimatedEntry delay={index * 100} duration={600}>
+			<View
+				style={[
+					styles.card,
+					{
+						backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+						borderColor: borderColor,
+					},
+				]}
+			>
+				<View style={styles.cardHeader}>
+					<ThemedText style={[styles.date, {color: mutedColor}]}>{formatDate(item.date)}</ThemedText>
+					<View style={{flexDirection: 'row', alignItems: 'center'}}>
+						{item.synced === SYNC_STATUS.UNSYNCED && (
+							<IconSymbol name="cloud.fill" size={16} color={mutedColor} style={{marginRight: 8}}/>
 						)}
-						<TouchableOpacity
-							onPress={() => router.push('/(patient)/new-thought')}
-							style={styles.addButton}
-						>
+						{item.synced === SYNC_STATUS.FAILED && (
 							<IconSymbol
-								name="plus.circle.fill"
-								size={32}
-								color={tintColor}
+								name="exclamationmark.triangle.fill"
+								size={16}
+								color={dangerColor}
+								style={{marginRight: 8}}
 							/>
-						</TouchableOpacity>
+						)}
 					</View>
 				</View>
+
+				<View style={{marginBottom: 16, flexDirection: 'row'}}>
+					<View style={[styles.emotionBadge, {backgroundColor: tintColor + '20'}]}>
+						<ThemedText style={[styles.emotion, {color: tintColor}]}>{item.emotion}</ThemedText>
+					</View>
+				</View>
+
+				<View style={styles.section}>
+					<ThemedText style={[styles.label, {color: mutedColor}]}>{FIELD_LABELS.SITUATION}</ThemedText>
+					<ThemedText style={styles.content}>{item.situation}</ThemedText>
+				</View>
+
+				<View style={styles.section}>
+					<ThemedText style={[styles.label, {color: mutedColor}]}>{FIELD_LABELS.THOUGHT}</ThemedText>
+					<ThemedText style={styles.content}>{item.thought}</ThemedText>
+				</View>
+
+				{renderOptionalField(FIELD_LABELS.BEHAVIOR, item.behavior)}
+				{renderOptionalField(FIELD_LABELS.EVIDENCE_PRO, item.evidencePro)}
+				{renderOptionalField(FIELD_LABELS.EVIDENCE_CONTRA, item.evidenceContra)}
+				{renderOptionalField(FIELD_LABELS.ALTERNATIVE, item.alternativeThoughts)}
+				{renderOptionalField(FIELD_LABELS.REEVALUATION, item.reevaluation)}
+
+				<View style={styles.cardFooter}>
+					<TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
+						<IconSymbol name="trash" size={18} color={dangerColor}/>
+						<ThemedText style={[styles.deleteButtonText, {color: dangerColor}]}>Excluir</ThemedText>
+					</TouchableOpacity>
+				</View>
+			</View>
+		</AnimatedEntry>
+	);
+
+	const renderEmptyComponent = () => (
+		<View style={styles.center}>
+			<IconSymbol name="doc.text" size={48} color={mutedColor}/>
+			<ThemedText style={[styles.emptyText, {color: mutedColor}]}>{MESSAGES.EMPTY_TITLE}</ThemedText>
+			<TouchableOpacity onPress={() => router.push('/(patient)/new-thought')} style={{marginTop: 20}}>
+				<ThemedText style={{color: tintColor, fontWeight: '600'}}>{MESSAGES.EMPTY_ACTION}</ThemedText>
+			</TouchableOpacity>
+		</View>
+	);
+
+	const renderHeader = () => (
+		<View style={styles.header}>
+			<View>
+				<ThemedText type="title">Meus Pensamentos</ThemedText>
+				<ThemedText style={{color: mutedColor, fontSize: 14}}>Registro diário de emoções</ThemedText>
+			</View>
+
+			<View style={{flexDirection: 'row', alignItems: 'center'}}>
+				{hasFailedSync && (
+					<TouchableOpacity
+						onPress={syncWithBackend}
+						style={styles.addButton}
+						disabled={isSyncing}
+					>
+						<IconSymbol name="arrow.access-timewise.circle.fill" size={28} color={dangerColor}/>
+					</TouchableOpacity>
+				)}
+				<TouchableOpacity
+					onPress={() => router.push('/(patient)/new-thought')}
+					style={styles.addButton}
+				>
+					<IconSymbol name="plus.circle.fill" size={32} color={tintColor}/>
+				</TouchableOpacity>
+			</View>
+		</View>
+	);
+
+	// ============= RENDER =============
+	return (
+		<ThemedView style={styles.container}>
+			<AmbientBackground/>
+			<SafeAreaView style={styles.safeArea}>
+				{renderHeader()}
 
 				<FlatList
 					data={thoughts}
@@ -115,126 +246,16 @@ export default function ThoughtsScreen() {
 					contentContainerStyle={styles.list}
 					showsVerticalScrollIndicator={false}
 					refreshControl={
-						<RefreshControl
-							refreshing={isSyncing}
-							onRefresh={syncWithBackend}
-							tintColor={tintColor}
-						/>
+						<RefreshControl refreshing={isSyncing} onRefresh={syncWithBackend} tintColor={tintColor}/>
 					}
-					ListEmptyComponent={
-						<View style={styles.center}>
-							<IconSymbol name="doc.text" size={48} color={mutedColor} />
-							<ThemedText style={[styles.emptyText, { color: mutedColor }]}>
-								Nenhum pensamento registrado ainda.
-							</ThemedText>
-							<TouchableOpacity
-								onPress={() => router.push('/(patient)/new-thought')}
-								style={{ marginTop: 20 }}
-							>
-								<ThemedText style={{ color: tintColor, fontWeight: '600' }}>
-									Registrar meu primeiro pensamento
-								</ThemedText>
-							</TouchableOpacity>
-						</View>
-					}
-					renderItem={({ item, index }) => (
-						<AnimatedEntry delay={index * 100} duration={600}>
-							<View style={[
-								styles.card,
-								{
-									backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-									borderColor: borderColor
-								}
-							]}>
-								<View style={styles.cardHeader}>
-									<ThemedText style={[styles.date, { color: mutedColor }]}>
-										{formatDate(item.date)}
-									</ThemedText>
-									<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-										{item.synced === 0 && (
-											<IconSymbol name="cloud.fill" size={16} color={mutedColor}
-												style={{ marginRight: 8 }} />
-										)}
-										{item.synced === -1 && (
-											<IconSymbol name="exclamationmark.triangle.fill" size={16}
-												color={dangerColor} style={{ marginRight: 8 }} />
-										)}
-									</View>
-								</View>
-
-								<View style={{ marginBottom: 16, flexDirection: 'row' }}>
-									<View style={[styles.emotionBadge, { backgroundColor: tintColor + '20' }]}>
-										<ThemedText style={[styles.emotion, { color: tintColor }]}>
-											{item.emotion}
-										</ThemedText>
-									</View>
-								</View>
-
-								<View style={styles.section}>
-									<ThemedText style={[styles.label, { color: mutedColor }]}>SITUAÇÃO</ThemedText>
-									<ThemedText style={styles.content}>{item.situation}</ThemedText>
-								</View>
-
-								<View style={styles.section}>
-									<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTO</ThemedText>
-									<ThemedText style={styles.content}>{item.thought}</ThemedText>
-								</View>
-
-								{!!item.behavior && (
-									<View style={styles.section}>
-										<ThemedText
-											style={[styles.label, { color: mutedColor }]}>COMPORTAMENTO</ThemedText>
-										<ThemedText style={styles.content}>{item.behavior}</ThemedText>
-									</View>
-								)}
-
-								{!!item.evidencePro && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS A
-											FAVOR</ThemedText>
-										<ThemedText style={styles.content}>{item.evidencePro}</ThemedText>
-									</View>
-								)}
-
-								{!!item.evidenceContra && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>EVIDÊNCIAS
-											CONTRA</ThemedText>
-										<ThemedText style={styles.content}>{item.evidenceContra}</ThemedText>
-									</View>
-								)}
-
-								{!!item.alternativeThoughts && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>PENSAMENTOS
-											ALTERNATIVOS</ThemedText>
-										<ThemedText style={styles.content}>{item.alternativeThoughts}</ThemedText>
-									</View>
-								)}
-
-								{!!item.reevaluation && (
-									<View style={styles.section}>
-										<ThemedText style={[styles.label, { color: mutedColor }]}>REAVALIAÇÃO</ThemedText>
-										<ThemedText style={styles.content}>{item.reevaluation}</ThemedText>
-									</View>
-								)}
-
-								<View style={styles.cardFooter}>
-									<TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
-										<IconSymbol name="trash" size={18} color={dangerColor} />
-										<ThemedText
-											style={[styles.deleteButtonText, { color: dangerColor }]}>Excluir</ThemedText>
-									</TouchableOpacity>
-								</View>
-							</View>
-						</AnimatedEntry>
-					)}
+					ListEmptyComponent={renderEmptyComponent}
+					renderItem={renderThoughtCard}
 				/>
 
 				<ConfirmModal
 					visible={deleteModalVisible}
-					title="Excluir Pensamento"
-					message="Tem certeza de que deseja excluir este registro? Esta ação não pode ser desfeita."
+					title={MESSAGES.MODAL_TITLE}
+					message={MESSAGES.MODAL_MESSAGE}
 					confirmText="Excluir"
 					cancelText="Cancelar"
 					onConfirm={confirmDelete}
@@ -246,6 +267,7 @@ export default function ThoughtsScreen() {
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,

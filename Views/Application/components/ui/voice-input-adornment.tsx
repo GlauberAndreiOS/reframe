@@ -20,11 +20,11 @@ interface VoiceInputAdornmentProps {
 }
 
 export function VoiceInputAdornment({
-										id,
-										value,
-										onResult,
-										onListeningChange,
-									}: VoiceInputAdornmentProps) {
+	id,
+	value,
+	onResult,
+	onListeningChange,
+}: VoiceInputAdornmentProps) {
 	const isWeb = Platform.OS === 'web';
 	const { showToast } = useToast();
 

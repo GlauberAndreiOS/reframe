@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/images/logo(Dark).png",
     "scheme": "application",
-    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "backgroundColor": "#151718",
     "ios": {

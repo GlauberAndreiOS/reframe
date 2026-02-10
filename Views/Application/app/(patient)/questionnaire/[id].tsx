@@ -1,74 +1,97 @@
 import React, {useEffect, useState} from 'react';
 import {ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View} from 'react-native';
 import {useLocalSearchParams, useRouter} from 'expo-router';
-import {useAuth} from '@/context/AuthContext';
-import api from '@/services/api';
-import {ThemedView} from '@/components/themed-view';
-import {ThemedText} from '@/components/themed-text';
-import {GlassInput} from '@/components/ui/glass-input';
-import {Card} from '@/components/ui/card';
-import {IconSymbol} from '@/components/ui/icon-symbol';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {Toast, ToastType} from '@/components/ui/toast';
+import {ThemedView, ThemedText, GlassInput, Card, IconSymbol, AmbientBackground, Toast} from '@/components';
+import {useThemeColor} from '@/hooks';
+import {useAuth} from '@/context';
+import {api} from '@/services';
 
-interface Questionnaire {
-    id: string;
-    title: string;
-    questions: {
-        title: string;
-        type: 'text' | 'select' | 'radio' | 'checkbox';
-        data: string[];
-    }[];
+// ============= TYPES & INTERFACES =============
+interface QuestionOption {
+	title: string;
+	type: 'text' | 'select' | 'radio' | 'checkbox';
+	data: string[];
 }
 
+interface Questionnaire {
+	id: string;
+	title: string;
+	questions: QuestionOption[];
+}
+
+interface ToastState {
+	message: string;
+	type: 'success' | 'error';
+}
+
+// ============= CONSTANTS =============
+const API_ENDPOINTS = {
+	GET_QUESTIONNAIRE: '/Questionnaire',
+	SUBMIT_RESPONSES: '/Questionnaire/Response',
+} as const;
+
+const MESSAGES = {
+	LOAD_ERROR: 'Não foi possível carregar o questionário.',
+	SUBMIT_SUCCESS: 'Respostas enviadas com sucesso!',
+	SUBMIT_ERROR: 'Não foi possível enviar as respostas.',
+	NOT_FOUND: 'Questionário não encontrado.',
+	PLACEHOLDER: 'Sua resposta...',
+	SUBMIT_BUTTON: 'Enviar Respostas',
+} as const;
+
+const TOAST_DURATION_MS = 3000;
+const REDIRECT_DELAY_MS = 1000;
+
+// ============= COMPONENT =============
 export default function AnswerQuestionnaireScreen() {
 	const {id} = useLocalSearchParams();
 	const router = useRouter();
 	const {token} = useAuth();
-	const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [answers, setAnswers] = useState<Record<string, any>>({});
-	const [submitting, setSubmitting] = useState(false);
-	const [toast, setToast] = useState<{message: string, type: ToastType} | null>(null);
 
+	// ============= THEME COLORS =============
 	const primaryColor = useThemeColor({}, 'tint');
 	const textColor = useThemeColor({}, 'text');
 	const surfaceColor = useThemeColor({}, 'surface');
 	const borderColor = useThemeColor({}, 'border');
 
+	// ============= STATE =============
+	const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [answers, setAnswers] = useState<Record<string, any>>({});
+	const [submitting, setSubmitting] = useState(false);
+	const [toast, setToast] = useState<ToastState | null>(null);
+
+	// ============= EFFECTS =============
 	useEffect(() => {
 		if (toast) {
 			const timer = setTimeout(() => {
 				setToast(null);
-			}, 3000);
+			}, TOAST_DURATION_MS);
 			return () => clearTimeout(timer);
 		}
 	}, [toast]);
 
 	useEffect(() => {
-		const fetchQuestionnaire = async () => {
-			try {
-				const response = await api.get(`/Questionnaire/${id}`, {
-					headers: {Authorization: `Bearer ${token}`}
-				});
-				setQuestionnaire(response.data);
-			} catch (error) {
-				console.error('Error fetching questionnaire:', error);
-				setToast({message: 'Não foi possível carregar o questionário.', type: 'error'});
-			} finally {
-				setLoading(false);
-			}
-		};
+		if (!id) return;
 
-		if (id) void fetchQuestionnaire();
+		api.get(`${API_ENDPOINTS.GET_QUESTIONNAIRE}/${id}`, {
+			headers: {Authorization: `Bearer ${token}`},
+		})
+			.then((response) => {
+				setQuestionnaire(response.data);
+			})
+			.catch((error) => {
+				console.error('Error fetching questionnaire:', error);
+				setToast({message: MESSAGES.LOAD_ERROR, type: 'error'});
+			})
+			.finally(() => {
+				setLoading(false);
+			});
 	}, [id, token]);
 
+	// ============= HANDLERS =============
 	const handleAnswerChange = (questionTitle: string, value: any) => {
-		setAnswers(prev => ({
-			...prev,
-			[questionTitle]: value
-		}));
+		setAnswers((prev) => ({...prev, [questionTitle]: value}));
 	};
 
 	const toggleCheckbox = (questionTitle: string, option: string) => {
@@ -79,32 +102,139 @@ export default function AnswerQuestionnaireScreen() {
 		handleAnswerChange(questionTitle, updated);
 	};
 
-	const handleSubmit = async () => {
+	const handleSubmit = () => {
 		if (!questionnaire) return;
 
 		setSubmitting(true);
-		try {
-			const payload = {
-				questionnaireId: questionnaire.id,
-				answers: Object.entries(answers).map(([key, value]) => ({
-					questionTitle: key,
-					value: value
-				}))
-			};
 
-			await api.post('/Questionnaire/Response', payload, {
-				headers: {Authorization: `Bearer ${token}`}
+		const payload = {
+			questionnaireId: questionnaire.id,
+			answers: Object.entries(answers).map(([key, value]) => ({
+				questionTitle: key,
+				value: value,
+			})),
+		};
+
+		api.post(API_ENDPOINTS.SUBMIT_RESPONSES, payload, {
+			headers: {Authorization: `Bearer ${token}`},
+		})
+			.then(() => {
+				setToast({message: MESSAGES.SUBMIT_SUCCESS, type: 'success'});
+				setTimeout(() => {
+					router.back();
+				}, REDIRECT_DELAY_MS);
+			})
+			.catch((error) => {
+				console.error('Error submitting answers:', error);
+				setToast({message: MESSAGES.SUBMIT_ERROR, type: 'error'});
+			})
+			.finally(() => {
+				setSubmitting(false);
 			});
+	};
 
-			setToast({message: 'Respostas enviadas com sucesso!', type: 'success'});
-			setTimeout(() => {
-				router.back();
-			}, 1000);
-		} catch (error) {
-			console.error('Error submitting answers:', error);
-			setToast({message: 'Não foi possível enviar as respostas.', type: 'error'});
-		} finally {
-			setSubmitting(false);
+	// ============= RENDER FUNCTIONS =============
+	const renderQuestionField = (question: QuestionOption) => {
+		const currentAnswer = answers[question.title];
+
+		switch (question.type) {
+		case 'text':
+			return (
+				<GlassInput
+					placeholder={MESSAGES.PLACEHOLDER}
+					value={currentAnswer || ''}
+					onChangeText={(text) => handleAnswerChange(question.title, text)}
+					multiline
+					style={{minHeight: 80, textAlignVertical: 'top'}}
+				/>
+			);
+
+		case 'select':
+			return (
+				<View style={styles.optionsContainer}>
+					{question.data.map((option, idx) => (
+						<TouchableOpacity
+							key={idx}
+							style={[
+								styles.optionButton,
+								{borderColor},
+								currentAnswer === option && {
+									borderColor: primaryColor,
+									backgroundColor: primaryColor + '20',
+								},
+							]}
+							onPress={() => handleAnswerChange(question.title, option)}
+						>
+							<ThemedText
+								style={[
+									styles.optionText,
+									currentAnswer === option && {color: primaryColor, fontWeight: '600'},
+								]}
+							>
+								{option}
+							</ThemedText>
+						</TouchableOpacity>
+					))}
+				</View>
+			);
+
+		case 'radio':
+			return (
+				<View style={styles.optionsContainer}>
+					{question.data.map((option, idx) => (
+						<TouchableOpacity
+							key={idx}
+							style={styles.radioRow}
+							onPress={() => handleAnswerChange(question.title, option)}
+						>
+							<View
+								style={[
+									styles.radioCircle,
+									{borderColor},
+									currentAnswer === option && {
+										borderColor: primaryColor,
+										backgroundColor: primaryColor,
+									},
+								]}
+							/>
+							<ThemedText style={styles.radioText}>{option}</ThemedText>
+						</TouchableOpacity>
+					))}
+				</View>
+			);
+
+		case 'checkbox':
+			return (
+				<View style={styles.optionsContainer}>
+					{question.data.map((option, idx) => {
+						const isSelected = (currentAnswer || []).includes(option);
+						return (
+							<TouchableOpacity
+								key={idx}
+								style={styles.checkboxRow}
+								onPress={() => toggleCheckbox(question.title, option)}
+							>
+								<View
+									style={[
+										styles.checkboxBox,
+										{borderColor},
+										isSelected && {
+											borderColor: primaryColor,
+											backgroundColor: primaryColor,
+										},
+									]}
+								>
+									{isSelected && <IconSymbol name="checkmark" size={16} color="#fff"/>}
+								</View>
+								<ThemedText style={styles.checkboxText}>{option}</ThemedText>
+							</TouchableOpacity>
+						);
+					})}
+				</View>
+			);
+
+		default:
+			return null;
 		}
 	};
 
@@ -119,14 +249,15 @@ export default function AnswerQuestionnaireScreen() {
 	if (!questionnaire) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
-				<ThemedText style={{color: '#EF4444'}}>Questionário não encontrado.</ThemedText>
+				<ThemedText style={{color: '#EF4444'}}>{MESSAGES.NOT_FOUND}</ThemedText>
 			</ThemedView>
 		);
 	}
 
+	// ============= RENDER =============
 	return (
 		<ThemedView style={styles.container}>
-			{toast && <Toast message={toast.message} type={toast.type} />}
+			{toast && <Toast message={toast.message} type={toast.type}/>}
 			<AmbientBackground/>
 			<View style={[styles.header, {borderBottomColor: surfaceColor}]}>
 				<TouchableOpacity onPress={() => router.back()}>
@@ -139,90 +270,12 @@ export default function AnswerQuestionnaireScreen() {
 			</View>
 
 			<ScrollView style={styles.content}>
-				{questionnaire.questions.map((q, index) => (
+				{questionnaire.questions.map((question, index) => (
 					<Card key={index} style={styles.card}>
-						<ThemedText type="defaultSemiBold"
-							style={styles.questionTitle}>{index + 1}. {q.title}</ThemedText>
-
-						{q.type === 'text' && (
-							<GlassInput
-								placeholder="Sua resposta..."
-								value={answers[q.title] || ''}
-								onChangeText={(text) => handleAnswerChange(q.title, text)}
-								multiline
-								style={{minHeight: 80, textAlignVertical: 'top'}}
-							/>
-						)}
-
-						{q.type === 'select' && (
-							<View style={styles.optionsContainer}>
-								{q.data.map((option, optIdx) => (
-									<TouchableOpacity
-										key={optIdx}
-										style={[
-											styles.optionButton,
-											{borderColor: borderColor},
-											answers[q.title] === option && {
-												borderColor: primaryColor,
-												backgroundColor: primaryColor + '20'
-											}
-										]}
-										onPress={() => handleAnswerChange(q.title, option)}
-									>
-										<ThemedText style={[
-											styles.optionText,
-											answers[q.title] === option && {color: primaryColor, fontWeight: '600'}
-										]}>{option}</ThemedText>
-									</TouchableOpacity>
-								))}
-							</View>
-						)}
-
-						{q.type === 'radio' && (
-							<View style={styles.optionsContainer}>
-								{q.data.map((option, optIdx) => (
-									<TouchableOpacity
-										key={optIdx}
-										style={styles.radioRow}
-										onPress={() => handleAnswerChange(q.title, option)}
-									>
-										<View style={[
-											styles.radioCircle,
-											{borderColor: borderColor},
-											answers[q.title] === option && {
-												borderColor: primaryColor,
-												backgroundColor: primaryColor
-											}
-										]}/>
-										<ThemedText style={styles.radioText}>{option}</ThemedText>
-									</TouchableOpacity>
-								))}
-							</View>
-						)}
-
-						{q.type === 'checkbox' && (
-							<View style={styles.optionsContainer}>
-								{q.data.map((option, optIdx) => {
-									const isSelected = (answers[q.title] || []).includes(option);
-									return (
-										<TouchableOpacity
-											key={optIdx}
-											style={styles.checkboxRow}
-											onPress={() => toggleCheckbox(q.title, option)}
-										>
-											<View style={[
-												styles.checkboxBox,
-												{borderColor: borderColor},
-												isSelected && {borderColor: primaryColor, backgroundColor: primaryColor}
-											]}>
-												{isSelected && <IconSymbol name="checkmark" size={16} color="#fff"/>}
-											</View>
-											<ThemedText style={styles.checkboxText}>{option}</ThemedText>
-										</TouchableOpacity>
-									);
-								})}
-							</View>
-						)}
+						<ThemedText type="defaultSemiBold" style={styles.questionTitle}>
+							{index + 1}. {question.title}
+						</ThemedText>
+						{renderQuestionField(question)}
 					</Card>
 				))}
 
@@ -230,7 +283,7 @@ export default function AnswerQuestionnaireScreen() {
 					style={[
 						styles.submitButton,
 						{backgroundColor: primaryColor},
-						submitting && styles.submitButtonDisabled
+						submitting && styles.submitButtonDisabled,
 					]}
 					onPress={handleSubmit}
 					disabled={submitting}
@@ -238,7 +291,7 @@ export default function AnswerQuestionnaireScreen() {
 					{submitting ? (
 						<ActivityIndicator color="#fff"/>
 					) : (
-						<ThemedText style={styles.submitButtonText}>Enviar Respostas</ThemedText>
+						<ThemedText style={styles.submitButtonText}>{MESSAGES.SUBMIT_BUTTON}</ThemedText>
 					)}
 				</TouchableOpacity>
 				<View style={{height: 80}}/>
@@ -247,6 +300,7 @@ export default function AnswerQuestionnaireScreen() {
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -331,3 +385,4 @@ const styles = StyleSheet.create({
 		fontWeight: 'bold',
 	},
 });
+

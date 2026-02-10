@@ -1,26 +1,71 @@
 import React, {useCallback, useState} from 'react';
 import {ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from "react-native-safe-area-context";
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {useFocusEffect, useRouter} from 'expo-router';
-import api from '@/services/api';
-import {ThemedText} from '@/components/themed-text';
-import {ThemedView} from '@/components/themed-view';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {useColorScheme} from '@/hooks/use-color-scheme';
-import {AnimatedEntry} from '@/components/ui/animated-entry';
-import {IconSymbol} from '@/components/ui/icon-symbol';
-import {useToast} from '@/context/ToastContext';
-import {useConfirm} from '@/context/ConfirmContext';
-import {PsychologistPickerModal} from '@/components/ui/psychologist-picker-modal';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {Avatar} from '@/components/ui/avatar';
+import {ThemedView, ThemedText, AnimatedEntry, IconSymbol, AmbientBackground, Avatar, PsychologistPickerModal} from '@/components';
+import {useThemeColor, useColorScheme} from '@/hooks';
+import {useToast, useConfirm} from '@/context';
+import {api} from '@/services';
 
+// ============= TYPES & INTERFACES =============
 interface Patient {
-    id: number;
-    name: string;
-    profilePictureUrl?: string;
+	id: number;
+	name: string;
+	profilePictureUrl?: string;
 }
 
+interface ConfirmOptions {
+	title: string;
+	message: string;
+	confirmText: string;
+	isDestructive: boolean;
+	onConfirm: () => void;
+}
+
+// ============= CONSTANTS =============
+const API_ENDPOINTS = {
+	GET_PATIENTS: '/Psychologist/patients',
+	UNLINK_PATIENT: '/Psychologist/patient',
+	TRANSFER_PATIENT: '/Psychologist/patient',
+} as const;
+
+const MESSAGES = {
+	TITLE: 'Meus Pacientes',
+	SUBTITLE: 'Acompanhamento clínico',
+	EMPTY_STATE: 'Nenhum paciente vinculado.',
+	UNLINK_TITLE: 'Desvincular Paciente',
+	UNLINK_MESSAGE_PREFIX: 'Tem certeza que deseja desvincular',
+	UNLINK_MESSAGE_SUFFIX: '? Esta ação não pode ser desfeita.',
+	UNLINK_SUCCESS: 'Paciente desvinculado com sucesso.',
+	UNLINK_ERROR: 'Falha ao desvincular paciente.',
+	TRANSFER_SUCCESS: 'Paciente transferido com sucesso.',
+	TRANSFER_ERROR: 'Falha ao transferir paciente.',
+	TRANSFER_MODAL_TITLE: 'Transferir para...',
+} as const;
+
+const ACTION_LABELS = {
+	REGISTROS: 'Registros',
+	TRANSFERIR: 'Transferir',
+	DESVINCULAR: 'Desvincular',
+} as const;
+
+const COLOR_VALUES = {
+	DANGER: '#EF4444',
+} as const;
+
+const ANIMATION_DELAY_MS = 100;
+const ANIMATION_DURATION_MS = 600;
+const AVATAR_SIZE = 56;
+const ICON_SIZE = 48;
+const ACTION_ICON_SIZE = 20;
+const AVATAR_MARGIN_RIGHT = 16;
+const CARD_BORDER_RADIUS = 20;
+const CARD_MARGIN_BOTTOM = 16;
+const ACTION_BUTTON_PADDING = 12;
+const VERTICAL_DIVIDER_OPACITY = 0.2;
+const EMPTY_ICON_SIZE = 48;
+
+// ============= COMPONENT =============
 export default function PatientsScreen() {
 	const router = useRouter();
 	const {showToast} = useToast();
@@ -28,53 +73,59 @@ export default function PatientsScreen() {
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const borderColor = useThemeColor({}, 'border');
 	const cardColor = useThemeColor({}, 'card');
 	const mutedColor = useThemeColor({}, 'muted');
 
+	// ============= STATE =============
 	const [patients, setPatients] = useState<Patient[]>([]);
 	const [loading, setLoading] = useState(true);
-
-
 	const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
 	const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
-	const fetchPatients = useCallback(async () => {
-		setLoading(true);
-		try {
-			const response = await api.get('/Psychologist/patients');
-			setPatients(response.data);
-		} catch (error) {
-			console.error('Failed to fetch patients:', error);
-		} finally {
-			setLoading(false);
-		}
-	}, []);
-
+	// ============= EFFECTS =============
 	useFocusEffect(
-		React.useCallback(() => {
-			void fetchPatients();
-		}, [fetchPatients])
+		useCallback(() => {
+			fetchPatients();
+		}, [])
 	);
 
+	// ============= HANDLERS =============
+	const fetchPatients = useCallback(() => {
+		setLoading(true);
+		api.get(API_ENDPOINTS.GET_PATIENTS)
+			.then((response) => {
+				setPatients(response.data);
+			})
+			.catch((error) => {
+				console.error('Failed to fetch patients:', error);
+			})
+			.finally(() => {
+				setLoading(false);
+			});
+	}, []);
+
 	const handleUnlink = (patientId: number, patientName: string) => {
-		confirm({
-			title: 'Desvincular Paciente',
-			message: `Tem certeza que deseja desvincular ${patientName}? Esta ação não pode ser desfeita.`,
-			confirmText: 'Desvincular',
+		const confirmOptions: ConfirmOptions = {
+			title: MESSAGES.UNLINK_TITLE,
+			message: `${MESSAGES.UNLINK_MESSAGE_PREFIX} ${patientName}${MESSAGES.UNLINK_MESSAGE_SUFFIX}`,
+			confirmText: ACTION_LABELS.DESVINCULAR,
 			isDestructive: true,
-			onConfirm: async () => {
-				try {
-					await api.put(`/Psychologist/patient/${patientId}/unlink`);
-					showToast('Paciente desvinculado com sucesso.', 'success');
-					void fetchPatients();
-				} catch (error) {
-					console.error('Failed to unlink patient:', error);
-					showToast('Falha ao desvincular paciente.', 'error');
-				}
-			}
-		});
+			onConfirm: () => {
+				api.put(`${API_ENDPOINTS.UNLINK_PATIENT}/${patientId}/unlink`)
+					.then(() => {
+						showToast(MESSAGES.UNLINK_SUCCESS, 'success');
+						fetchPatients();
+					})
+					.catch((error) => {
+						console.error('Failed to unlink patient:', error);
+						showToast(MESSAGES.UNLINK_ERROR, 'error');
+					});
+			},
+		};
+		confirm(confirmOptions);
 	};
 
 	const openTransferModal = (patientId: number) => {
@@ -82,30 +133,110 @@ export default function PatientsScreen() {
 		setIsTransferModalVisible(true);
 	};
 
-	const handleTransfer = async (targetPsychologistId: number | null) => {
+	const handleTransfer = (targetPsychologistId: number | null) => {
 		setIsTransferModalVisible(false);
-		if (!targetPsychologistId || !selectedPatientId) return;
-
-		try {
-			await api.put(`/Psychologist/patient/${selectedPatientId}/transfer/${targetPsychologistId}`);
-			showToast('Paciente transferido com sucesso.', 'success');
-			void fetchPatients();
-		} catch (error) {
-			console.error('Failed to transfer patient:', error);
-			showToast('Falha ao transferir paciente.', 'error');
-		} finally {
-			setSelectedPatientId(null);
+		if (!targetPsychologistId || !selectedPatientId) {
+			return;
 		}
+
+		api.put(`${API_ENDPOINTS.TRANSFER_PATIENT}/${selectedPatientId}/transfer/${targetPsychologistId}`)
+			.then(() => {
+				showToast(MESSAGES.TRANSFER_SUCCESS, 'success');
+				fetchPatients();
+			})
+			.catch((error) => {
+				console.error('Failed to transfer patient:', error);
+				showToast(MESSAGES.TRANSFER_ERROR, 'error');
+			})
+			.finally(() => {
+				setSelectedPatientId(null);
+			});
 	};
 
+	// ============= RENDER FUNCTIONS =============
+	const renderActionButton = (iconName: string, label: string, color: string, onPress: () => void) => (
+		<TouchableOpacity style={styles.actionButton} onPress={onPress}>
+			<IconSymbol name={iconName} size={ACTION_ICON_SIZE} color={color}/>
+			<ThemedText style={[styles.actionText, {color}]}>{label}</ThemedText>
+		</TouchableOpacity>
+	);
+
+	const renderPatientActions = (patient: Patient) => (
+		<View style={[styles.actions, {borderTopColor: borderColor + '33'}]}>
+			{renderActionButton(
+				'doc.text.fill',
+				ACTION_LABELS.REGISTROS,
+				tintColor,
+				() =>
+					router.push({
+						pathname: '/(psychologist)/patient/[id]',
+						params: {id: patient.id, name: patient.name},
+					})
+			)}
+
+			<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
+
+			{renderActionButton(
+				'arrow.2.squarepath',
+				ACTION_LABELS.TRANSFERIR,
+				mutedColor,
+				() => openTransferModal(patient.id)
+			)}
+
+			<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
+
+			{renderActionButton(
+				'person.slash.fill',
+				ACTION_LABELS.DESVINCULAR,
+				COLOR_VALUES.DANGER,
+				() => handleUnlink(patient.id, patient.name)
+			)}
+		</View>
+	);
+
+	const renderPatientCard = (item: Patient, index: number) => (
+		<AnimatedEntry delay={index * ANIMATION_DELAY_MS} duration={ANIMATION_DURATION_MS}>
+			<View
+				style={[
+					styles.card,
+					{
+						backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+						borderColor: borderColor,
+					},
+				]}
+			>
+				<View style={styles.cardContent}>
+					<View style={{marginRight: AVATAR_MARGIN_RIGHT}}>
+						<Avatar uri={item.profilePictureUrl} size={AVATAR_SIZE} editable={false} name={item.name}/>
+					</View>
+					<ThemedText numberOfLines={1} style={styles.name}>
+						{item.name}
+					</ThemedText>
+				</View>
+
+				{renderPatientActions(item)}
+			</View>
+		</AnimatedEntry>
+	);
+
+	const renderEmptyComponent = () => (
+		<View style={styles.center}>
+			<IconSymbol name="person.2.fill" size={EMPTY_ICON_SIZE} color={mutedColor}/>
+			<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
+				{MESSAGES.EMPTY_STATE}
+			</ThemedText>
+		</View>
+	);
+
+	// ============= RENDER =============
 	return (
 		<ThemedView style={styles.container}>
 			<AmbientBackground/>
 			<SafeAreaView style={styles.safeArea}>
 				<View style={styles.header}>
-					<ThemedText type="title">Meus Pacientes</ThemedText>
+					<ThemedText type="title">{MESSAGES.TITLE}</ThemedText>
 					<ThemedText style={{color: mutedColor, fontSize: 14}}>
-						Acompanhamento clínico
+						{MESSAGES.SUBTITLE}
 					</ThemedText>
 				</View>
 
@@ -119,75 +250,8 @@ export default function PatientsScreen() {
 						keyExtractor={(item) => item.id.toString()}
 						contentContainerStyle={styles.list}
 						showsVerticalScrollIndicator={false}
-						ListEmptyComponent={
-							<View style={styles.center}>
-								<IconSymbol name="person.2.fill" size={48} color={mutedColor}/>
-								<ThemedText style={[styles.emptyText, {color: mutedColor}]}>
-									Nenhum paciente vinculado.
-								</ThemedText>
-							</View>
-						}
-						renderItem={({item, index}) => (
-							<AnimatedEntry delay={index * 100} duration={600}>
-								<View
-									style={[
-										styles.card,
-										{
-											backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-											borderColor: borderColor
-										}
-									]}
-								>
-									<View style={styles.cardContent}>
-										<View style={{marginRight: 16}}>
-											<Avatar 
-												uri={item.profilePictureUrl} 
-												size={56} 
-												editable={false}
-												name={item.name}
-											/>
-										</View>
-										<ThemedText numberOfLines={1} style={styles.name}>{item.name}</ThemedText>
-									</View>
-
-									<View style={[styles.actions, {borderTopColor: borderColor + '33'}]}>
-										<TouchableOpacity
-											style={styles.actionButton}
-											onPress={() => router.push({
-												pathname: '/(psychologist)/patient/[id]',
-												params: {id: item.id, name: item.name}
-											})}
-										>
-											<IconSymbol name="doc.text.fill" size={20} color={tintColor}/>
-											<ThemedText
-												style={[styles.actionText, {color: tintColor}]}>Registros</ThemedText>
-										</TouchableOpacity>
-
-										<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
-
-										<TouchableOpacity
-											style={styles.actionButton}
-											onPress={() => openTransferModal(item.id)}
-										>
-											<IconSymbol name="arrow.2.squarepath" size={20} color={mutedColor}/>
-											<ThemedText
-												style={[styles.actionText, {color: mutedColor}]}>Transferir</ThemedText>
-										</TouchableOpacity>
-
-										<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
-
-										<TouchableOpacity
-											style={styles.actionButton}
-											onPress={() => handleUnlink(item.id, item.name)}
-										>
-											<IconSymbol name="person.slash.fill" size={20} color="#EF4444"/>
-											<ThemedText
-												style={[styles.actionText, {color: '#EF4444'}]}>Desvincular</ThemedText>
-										</TouchableOpacity>
-									</View>
-								</View>
-							</AnimatedEntry>
-						)}
+						ListEmptyComponent={renderEmptyComponent}
+						renderItem={({item, index}) => renderPatientCard(item, index)}
 					/>
 				)}
 
@@ -196,13 +260,15 @@ export default function PatientsScreen() {
 					onClose={() => setIsTransferModalVisible(false)}
 					onSelect={handleTransfer}
 					showUnlinkOption={false}
-					title="Transferir para..."
+					title={MESSAGES.TRANSFER_MODAL_TITLE}
 				/>
 			</SafeAreaView>
 		</ThemedView>
 	);
 }
 
+
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -225,8 +291,8 @@ const styles = StyleSheet.create({
 		paddingBottom: 100,
 	},
 	card: {
-		borderRadius: 20,
-		marginBottom: 16,
+		borderRadius: CARD_BORDER_RADIUS,
+		marginBottom: CARD_MARGIN_BOTTOM,
 		borderWidth: 1,
 		overflow: 'hidden',
 	},
@@ -250,7 +316,7 @@ const styles = StyleSheet.create({
 		flexDirection: 'column',
 		alignItems: 'center',
 		justifyContent: 'center',
-		paddingVertical: 12,
+		paddingVertical: ACTION_BUTTON_PADDING,
 		gap: 4,
 	},
 	actionText: {
@@ -260,7 +326,7 @@ const styles = StyleSheet.create({
 	verticalDivider: {
 		width: 1,
 		height: '60%',
-		opacity: 0.2,
+		opacity: VERTICAL_DIVIDER_OPACITY,
 	},
 	emptyText: {
 		textAlign: 'center',

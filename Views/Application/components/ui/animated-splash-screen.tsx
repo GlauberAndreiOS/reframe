@@ -4,12 +4,12 @@ import {useRouter} from 'expo-router';
 import Animated, {useAnimatedStyle, useSharedValue, withTiming,} from 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 
-import {ThemedView} from '@/components/themed-view';
-import {useAuth} from '@/context/AuthContext';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {ReframeLogo} from '@/components/ui/reframe-logo';
+import {ThemedView} from '../themed-view';
+import {AmbientBackground} from './ambient-background';
+import {ReframeLogo} from './reframe-logo';
+import {useAuth} from '@/context';
 
-export function AnimatedSplashScreen() {
+export default function AnimatedSplashScreen() {
 	const router = useRouter();
 	const {token, userType} = useAuth();
 

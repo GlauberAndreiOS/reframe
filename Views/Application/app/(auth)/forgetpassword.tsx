@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useCallback, useState} from 'react';
 import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
@@ -9,47 +9,143 @@ import {
 	View,
 } from 'react-native';
 import {useRouter} from 'expo-router';
-import api from '@/services/api';
-import {ThemedView} from '@/components/themed-view';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {useToast} from '@/context/ToastContext';
+import {api} from '@/services';
+import {useToast} from '@/context';
+import {useThemeColor} from '@/hooks';
+import {
+	ThemedView,
+	AmbientBackground,
+	GlassInput,
+	ReframeLogo,
+	AnimatedEntry,
+} from '@/components';
 
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {GlassInput} from '@/components/ui/glass-input';
-import {ReframeLogo} from '@/components/ui/reframe-logo';
-import {AnimatedEntry} from '@/components/ui/animated-entry';
+// ============= TYPES & INTERFACES =============
+interface PasswordResetRequest {
+	email: string;
+}
 
+// ============= CONSTANTS =============
+const VALIDATION_MESSAGES = {
+	FILL_EMAIL: 'Por favor, insira seu e-mail.',
+	RESET_SUCCESS: 'Instruções enviadas para o seu e-mail.',
+	RESET_ERROR: 'Falha ao solicitar recuperação de senha.',
+} as const;
+
+const API_ENDPOINTS = {
+	FORGOT_PASSWORD: '/Auth/forgot-password',
+} as const;
+
+const NAVIGATION_DELAYS = {
+	BACK_DELAY: 2000,
+} as const;
+
+const DESCRIPTION_TEXT = 'Insira seu e-mail para receber as instruções de redefinição de senha.';
+
+// ============= UTILITY FUNCTIONS =============
+const validateEmail = (email: string): boolean => {
+	return email.trim().length > 0;
+};
+
+// ============= ERROR HANDLING =============
+const handlePasswordResetError = (error: any): string => {
+	if (error.response?.data) {
+		return typeof error.response.data === 'string'
+			? error.response.data
+			: VALIDATION_MESSAGES.RESET_ERROR;
+	}
+	return VALIDATION_MESSAGES.RESET_ERROR;
+};
+
+// ============= MAIN COMPONENT =============
 export default function ForgetPassword() {
 	const router = useRouter();
 	const {showToast} = useToast();
-	const [email, setEmail] = useState('');
-	const [isLoading, setIsLoading] = useState(false);
 
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const mutedColor = useThemeColor({}, 'muted');
 
-	const handleResetPassword = async () => {
-		if (!email) {
-			showToast('Por favor, insira seu e-mail.', 'error');
+	// ============= FORM STATE =============
+	const [email, setEmail] = useState<PasswordResetRequest>({
+		email: '',
+	});
+	const [isLoading, setIsLoading] = useState(false);
+
+	// ============= EMAIL HANDLER =============
+	const updateEmail = (value: string) => {
+		setEmail({email: value});
+	};
+
+	// ============= PASSWORD RESET LOGIC =============
+	const handleResetPassword = useCallback(() => {
+		if (!validateEmail(email.email)) {
+			showToast(VALIDATION_MESSAGES.FILL_EMAIL, 'error');
 			return;
 		}
 
 		setIsLoading(true);
 
-		try {
-			await api.post('/Auth/forgot-password', {email});
+		api
+			.post(API_ENDPOINTS.FORGOT_PASSWORD, email)
+			.then(() => {
+				showToast(VALIDATION_MESSAGES.RESET_SUCCESS, 'success');
+				setTimeout(() => router.back(), NAVIGATION_DELAYS.BACK_DELAY);
+			})
+			.catch(error => {
+				console.error('Forgot password error:', error);
+				const errorMessage = handlePasswordResetError(error);
+				showToast(errorMessage, 'error');
+			})
+			.finally(() => {
+				setIsLoading(false);
+			});
+	}, [email, showToast, router]);
 
-			showToast('Instruções enviadas para o seu e-mail.', 'success');
-			setTimeout(() => router.back(), 2000);
-
-		} catch (error: any) {
-			console.error('Forgot password error:', error);
-			const errorMessage = error.response?.data || 'Falha ao solicitar recuperação de senha.';
-			showToast(typeof errorMessage === 'string' ? errorMessage : 'Falha ao solicitar recuperação.', 'error');
-		} finally {
-			setIsLoading(false);
-		}
+	// ============= NAVIGATION HANDLERS =============
+	const handleBackToLogin = () => {
+		router.back();
 	};
+
+	// ============= RENDER COMPONENTS =============
+	const renderDescription = () => (
+		<Text style={[styles.description, {color: mutedColor}]}>
+			{DESCRIPTION_TEXT}
+		</Text>
+	);
+
+	const renderEmailInput = () => (
+		<View style={styles.inputGroup}>
+			<GlassInput
+				placeholder="E-mail cadastrado"
+				value={email.email}
+				onChangeText={updateEmail}
+				autoCapitalize="none"
+				keyboardType="email-address"
+			/>
+		</View>
+	);
+
+	const renderSubmitButton = () => (
+		<TouchableOpacity
+			style={[styles.primaryButton, {backgroundColor: tintColor}]}
+			onPress={handleResetPassword}
+			disabled={isLoading}
+			activeOpacity={0.8}
+		>
+			{isLoading ? (
+				<ActivityIndicator color="#FFFFFF"/>
+			) : (
+				<Text style={styles.primaryButtonText}>ENVIAR INSTRUÇÕES</Text>
+			)}
+		</TouchableOpacity>
+	);
+
+	const renderBackButton = () => (
+		<TouchableOpacity onPress={handleBackToLogin} style={styles.backButton}>
+			<Text style={[styles.backButtonText, {color: mutedColor}]}>Voltar para Login</Text>
+		</TouchableOpacity>
+	);
 
 	return (
 		<ThemedView style={styles.container}>
@@ -63,36 +159,10 @@ export default function ForgetPassword() {
 					<ReframeLogo/>
 
 					<View style={styles.formSection}>
-						<Text style={[styles.description, {color: mutedColor}]}>
-							Insira seu e-mail para receber as instruções de redefinição de senha.
-						</Text>
-
-						<View style={styles.inputGroup}>
-							<GlassInput
-								placeholder="E-mail cadastrado"
-								value={email}
-								onChangeText={setEmail}
-								autoCapitalize="none"
-								keyboardType="email-address"
-							/>
-						</View>
-
-						<TouchableOpacity
-							style={[styles.primaryButton, {backgroundColor: tintColor}]}
-							onPress={handleResetPassword}
-							disabled={isLoading}
-							activeOpacity={0.8}
-						>
-							{isLoading ? (
-								<ActivityIndicator color="#FFFFFF"/>
-							) : (
-								<Text style={styles.primaryButtonText}>ENVIAR INSTRUÇÕES</Text>
-							)}
-						</TouchableOpacity>
-
-						<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-							<Text style={[styles.backButtonText, {color: mutedColor}]}>Voltar para Login</Text>
-						</TouchableOpacity>
+						{renderDescription()}
+						{renderEmailInput()}
+						{renderSubmitButton()}
+						{renderBackButton()}
 					</View>
 				</AnimatedEntry>
 			</KeyboardAvoidingView>

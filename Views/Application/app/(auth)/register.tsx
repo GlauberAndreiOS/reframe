@@ -10,193 +10,363 @@ import {
 	View
 } from 'react-native';
 import {useRouter} from 'expo-router';
-import api from '@/services/api';
-import {ThemedView} from '@/components/themed-view';
-import {useThemeColor} from '@/hooks/use-theme-color';
-import {useToast} from '@/context/ToastContext';
-import {useColorScheme} from '@/hooks/use-color-scheme';
-import {AmbientBackground} from '@/components/ui/ambient-background';
-import {GlassInput, HelperTextType} from '@/components/ui/glass-input';
-import {AnimatedEntry} from '@/components/ui/animated-entry';
-import {Avatar} from '@/components/ui/avatar';
+import {api} from '@/services';
+import {
+	ThemedView,
+	AmbientBackground,
+	GlassInput,
+	AnimatedEntry,
+	Avatar,
+} from '@/components';
+import type {HelperTextType} from '@/components';
+import {useThemeColor, useColorScheme} from '@/hooks';
+import {useToast} from '@/context';
 
+// ============= TYPES & INTERFACES =============
 type UserType = 'patient' | 'psychologist' | null;
+type RegistrationStep = 0 | 1 | 2;
 
 interface Psychologist {
-    id: number;
-    name: string;
-    crp: string;
-    email: string;
-    profilePictureUrl?: string;
+	id: number;
+	name: string;
+	crp: string;
+	email: string;
+	profilePictureUrl?: string;
 }
 
+interface HelperMessage {
+	text: string;
+	type: HelperTextType;
+}
+
+interface RegistrationFormState {
+	username: string;
+	name: string;
+	password: string;
+	confirmPassword: string;
+	crp: string;
+	uf: string;
+}
+
+interface PsychologistFilterState {
+	searchQuery: string;
+	selectedPsychologistId: number | null;
+}
+
+// ============= CONSTANTS =============
+const REGISTRATION_STEPS = {
+	AUTH: 0,
+	USER_TYPE: 1,
+	DETAILS: 2,
+} as const;
+
+const USER_TYPES = {
+	PATIENT: 'patient' as const,
+	PSYCHOLOGIST: 'psychologist' as const,
+} as const;
+
+const VALIDATION_MESSAGES = {
+	FILL_ALL_FIELDS: 'Preencha todos os campos.',
+	INVALID_EMAIL: 'Insira um e-mail válido.',
+	EMAIL_TAKEN: 'E-mail já cadastrado.',
+	EMAIL_AVAILABLE: 'E-mail disponível!',
+	PASSWORDS_DONT_MATCH: 'As senhas não coincidem.',
+	SELECT_USER_TYPE: 'Selecione um tipo de usuário.',
+	FILL_PROFESSIONAL_DATA: 'Preencha CRP e UF.',
+	REGISTRATION_SUCCESS: 'Cadastro realizado com sucesso!',
+	REGISTRATION_ERROR: 'Falha ao realizar cadastro.',
+	PSYCHOLOGISTS_ERROR: 'Não foi possível carregar a lista de psicólogos.',
+} as const;
+
+const CRP_FORMAT = {
+	MAX_LENGTH: 8,
+	SEPARATOR: '/',
+	DIGITS_BEFORE_SEPARATOR: 2,
+	DIGITS_AFTER_SEPARATOR: 5,
+} as const;
+
+const UF_MAX_LENGTH = 2;
+const REDIRECT_DELAY_MS = 1500;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ============= UTILITY FUNCTIONS =============
+const validateEmail = (email: string): boolean => {
+	return EMAIL_REGEX.test(email);
+};
+
+const formatCrpNumber = (text: string): string => {
+	const cleanedDigits = text.replace(/\D/g, '');
+	if (cleanedDigits.length > CRP_FORMAT.DIGITS_BEFORE_SEPARATOR) {
+		const beforeSeparator = cleanedDigits.slice(0, CRP_FORMAT.DIGITS_BEFORE_SEPARATOR);
+		const afterSeparator = cleanedDigits.slice(CRP_FORMAT.DIGITS_BEFORE_SEPARATOR);
+		return `${beforeSeparator}${CRP_FORMAT.SEPARATOR}${afterSeparator}`;
+	}
+	return cleanedDigits;
+};
+
+const buildPsychologistRegistrationPayload = (
+	username: string,
+	password: string,
+	name: string,
+	crp: string,
+	uf: string
+) => ({
+	username,
+	password,
+	name,
+	userType: 0,
+	crpNumber: crp.split(CRP_FORMAT.SEPARATOR)[0],
+	crpUf: uf,
+});
+
+const buildPatientRegistrationPayload = (
+	username: string,
+	password: string,
+	name: string,
+	psychologistId: number | null
+) => ({
+	username,
+	password,
+	name,
+	userType: 1,
+	psychologistId,
+});
+
+// ============= ERROR HANDLING =============
+const handleRegistrationError = (error: any): string => {
+	if (error.response?.data) {
+		return typeof error.response.data === 'string'
+			? error.response.data
+			: VALIDATION_MESSAGES.REGISTRATION_ERROR;
+	}
+	return VALIDATION_MESSAGES.REGISTRATION_ERROR;
+};
+
+const handleApiError = (error: any): string => {
+	if (error.response?.data) {
+		return typeof error.response.data === 'string'
+			? error.response.data
+			: VALIDATION_MESSAGES.PSYCHOLOGISTS_ERROR;
+	}
+	return VALIDATION_MESSAGES.PSYCHOLOGISTS_ERROR;
+};
+
+// ============= MAIN COMPONENT =============
 export default function Register() {
 	const router = useRouter();
 	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
-	const [step, setStep] = useState(0);
-
-	const [username, setUsername] = useState('');
-	const [name, setName] = useState('');
-	const [password, setPassword] = useState('');
-	const [confirmPassword, setConfirmPassword] = useState('');
-	const [userType, setUserType] = useState<UserType>(null);
-
-	const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-	const [usernameHelper, setUsernameHelper] = useState<{ text: string, type: HelperTextType } | null>(null);
-	const [passwordHelper, setPasswordHelper] = useState<{ text: string, type: HelperTextType } | null>(null);
-
-	const [crp, setCrp] = useState('');
-	const [uf, setUf] = useState('');
-
-	const [searchQuery, setSearchQuery] = useState('');
-	const [selectedPsychologistId, setSelectedPsychologistId] = useState<number | null>(null);
-	const [psychologists, setPsychologists] = useState<Psychologist[]>([]);
-	const [isLoadingPsychologists, setIsLoadingPsychologists] = useState(false);
-
+	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const borderColor = useThemeColor({}, 'border');
 	const mutedColor = useThemeColor({}, 'muted');
 	const textColor = useThemeColor({}, 'text');
 
-	const validateEmail = (email: string) => {
-		const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-		return re.test(email);
+	// ============= FORM STATE =============
+	const [currentStep, setCurrentStep] = useState<RegistrationStep>(REGISTRATION_STEPS.AUTH as RegistrationStep);
+	const [userType, setUserType] = useState<UserType>(null);
+
+	const [formData, setFormData] = useState<RegistrationFormState>({
+		username: '',
+		name: '',
+		password: '',
+		confirmPassword: '',
+		crp: '',
+		uf: '',
+	});
+
+	const [usernameHelper, setUsernameHelper] = useState<HelperMessage | null>(null);
+	const [passwordHelper, setPasswordHelper] = useState<HelperMessage | null>(null);
+	const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+
+	// ============= PSYCHOLOGIST LIST STATE =============
+	const [psychologists, setPsychologists] = useState<Psychologist[]>([]);
+	const [isLoadingPsychologists, setIsLoadingPsychologists] = useState(false);
+	const [filterState, setFilterState] = useState<PsychologistFilterState>({
+		searchQuery: '',
+		selectedPsychologistId: null,
+	});
+
+	// ============= FORM DATA HANDLERS =============
+	const updateFormData = (updates: Partial<RegistrationFormState>) => {
+		setFormData(prev => ({...prev, ...updates}));
 	};
 
-	const checkUsername = async () => {
-		if (!username) {
+	const updateFilterState = (updates: Partial<PsychologistFilterState>) => {
+		setFilterState(prev => ({...prev, ...updates}));
+	};
+
+	// ============= USERNAME VALIDATION =============
+	const checkUsername = useCallback(() => {
+		if (!formData.username) {
 			setUsernameHelper(null);
 			return;
 		}
 
-		if (!validateEmail(username)) {
-			setUsernameHelper({text: 'Insira um e-mail válido.', type: 'error'});
+		if (!validateEmail(formData.username)) {
+			setUsernameHelper({text: VALIDATION_MESSAGES.INVALID_EMAIL, type: 'error'});
 			return;
 		}
 
 		setIsCheckingUsername(true);
 		setUsernameHelper(null);
 
-		try {
-			const response = await api.get(`/Auth/check-username/${username}`);
-			if (response.data.exists) {
-				setUsernameHelper({text: 'E-mail já cadastrado.', type: 'error'});
-				showToast('Este e-mail já está em uso.', 'error');
-			} else {
-				setUsernameHelper({text: 'E-mail disponível!', type: 'success'});
-			}
-		} catch (error) {
-			console.error('Failed to check username:', error);
-		} finally {
-			setIsCheckingUsername(false);
-		}
-	};
+		api
+			.get(`/Auth/check-username/${formData.username}`)
+			.then(response => {
+				if (response.data.exists) {
+					setUsernameHelper({text: VALIDATION_MESSAGES.EMAIL_TAKEN, type: 'error'});
+				} else {
+					setUsernameHelper({text: VALIDATION_MESSAGES.EMAIL_AVAILABLE, type: 'success'});
+				}
+			})
+			.catch(error => {
+				console.error('Failed to check username:', error);
+			})
+			.finally(() => {
+				setIsCheckingUsername(false);
+			});
+	}, [formData.username]);
 
+	// ============= PASSWORD VALIDATION =============
 	useEffect(() => {
-		if (confirmPassword && password !== confirmPassword) {
-			setPasswordHelper({text: 'As senhas não coincidem.', type: 'error'});
+		if (formData.confirmPassword && formData.password !== formData.confirmPassword) {
+			setPasswordHelper({text: VALIDATION_MESSAGES.PASSWORDS_DONT_MATCH, type: 'error'});
 		} else {
 			setPasswordHelper(null);
 		}
-	}, [password, confirmPassword]);
+	}, [formData.password, formData.confirmPassword]);
 
-	const fetchPsychologists = useCallback(async () => {
+	// ============= PSYCHOLOGISTS DATA FETCHING =============
+	const fetchPsychologists = useCallback(() => {
 		setIsLoadingPsychologists(true);
-		try {
-			const response = await api.get('/Psychologist/all');
-			setPsychologists(response.data);
-		} catch (error) {
-			console.error('Failed to fetch psychologists:', error);
-			showToast('Não foi possível carregar a lista de psicólogos.', 'error');
-		} finally {
-			setIsLoadingPsychologists(false);
-		}
+
+		api
+			.get('/Psychologist/all')
+			.then(response => {
+				setPsychologists(response.data);
+			})
+			.catch(error => {
+				console.error('Failed to fetch psychologists:', error);
+				const errorMessage = handleApiError(error);
+				showToast(errorMessage, 'error');
+			})
+			.finally(() => {
+				setIsLoadingPsychologists(false);
+			});
 	}, [showToast]);
 
 	useEffect(() => {
-		if (step === 2 && userType === 'patient') {
+		if (currentStep === REGISTRATION_STEPS.DETAILS && userType === USER_TYPES.PATIENT) {
 			fetchPsychologists();
 		}
-	}, [step, userType, fetchPsychologists]);
+	}, [currentStep, userType, fetchPsychologists]);
 
-	const handleNext = () => {
-		if (step === 0) {
-			if (!username || !password || !confirmPassword || !name) {
-				showToast('Preencha todos os campos.', 'error');
-				return;
-			}
-			if (usernameHelper?.type === 'error') {
-				showToast('E-mail inválido ou indisponível.', 'error');
-				return;
-			}
-			if (password !== confirmPassword) {
-				showToast('As senhas não coincidem.', 'error');
-				return;
-			}
-			setStep(1);
-		} else if (step === 1) {
-			if (!userType) {
-				showToast('Selecione um tipo de usuário.', 'error');
-				return;
-			}
-			setStep(2);
+	// ============= STEP VALIDATION LOGIC =============
+	const validateAuthStep = (): boolean => {
+		const {username, name, password, confirmPassword} = formData;
+
+		if (!username || !password || !confirmPassword || !name) {
+			showToast(VALIDATION_MESSAGES.FILL_ALL_FIELDS, 'error');
+			return false;
+		}
+
+		if (usernameHelper?.type === 'error') {
+			showToast(VALIDATION_MESSAGES.INVALID_EMAIL, 'error');
+			return false;
+		}
+
+		if (password !== confirmPassword) {
+			showToast(VALIDATION_MESSAGES.PASSWORDS_DONT_MATCH, 'error');
+			return false;
+		}
+
+		return true;
+	};
+
+	const validateUserTypeStep = (): boolean => {
+		if (!userType) {
+			showToast(VALIDATION_MESSAGES.SELECT_USER_TYPE, 'error');
+			return false;
+		}
+		return true;
+	};
+
+	const validateProfessionalDetails = (): boolean => {
+		const {crp, uf} = formData;
+		if (!crp || !uf) {
+			showToast(VALIDATION_MESSAGES.FILL_PROFESSIONAL_DATA, 'error');
+			return false;
+		}
+		return true;
+	};
+
+	// ============= NAVIGATION =============
+	const handleNextStep = () => {
+		if (currentStep === REGISTRATION_STEPS.AUTH && validateAuthStep()) {
+			setCurrentStep(REGISTRATION_STEPS.USER_TYPE as RegistrationStep);
+		} else if (currentStep === REGISTRATION_STEPS.USER_TYPE && validateUserTypeStep()) {
+			setCurrentStep(REGISTRATION_STEPS.DETAILS as RegistrationStep);
 		}
 	};
 
-	const handleRegister = async () => {
-		if (userType === 'psychologist') {
-			if (!crp || !uf) {
-				showToast('Preencha CRP e UF.', 'error');
-				return;
-			}
+	const handlePreviousStep = () => {
+		if (currentStep > 0) {
+			setCurrentStep((currentStep - 1) as RegistrationStep);
+		}
+	};
+
+	const handleBackButton = () => {
+		if (currentStep === 0) {
+			router.back();
+		} else {
+			handlePreviousStep();
+		}
+	};
+
+	// ============= REGISTRATION =============
+	const handleRegister = useCallback(() => {
+		if (userType === USER_TYPES.PSYCHOLOGIST) {
+			if (!validateProfessionalDetails()) return;
 		}
 
-		const payload = {
-			username,
-			password,
-			name,
-			userType: userType === 'patient' ? 1 : 0,
-			...(userType === 'psychologist'
-				? {
-					crpNumber: crp.split('/')[0],
-					crpUf: uf
-				}
-				: {
-					psychologistId: selectedPsychologistId
-				}
+		const payload = userType === USER_TYPES.PSYCHOLOGIST
+			? buildPsychologistRegistrationPayload(
+				formData.username,
+				formData.password,
+				formData.name,
+				formData.crp,
+				formData.uf
 			)
-		};
+			: buildPatientRegistrationPayload(
+				formData.username,
+				formData.password,
+				formData.name,
+				filterState.selectedPsychologistId
+			);
 
-		try {
-			await api.post('/Auth/register', payload);
+		api
+			.post('/Auth/register', payload)
+			.then(() => {
+				showToast(VALIDATION_MESSAGES.REGISTRATION_SUCCESS, 'success');
+				setTimeout(() => router.replace('/(auth)/login'), REDIRECT_DELAY_MS);
+			})
+			.catch(error => {
+				console.error('Registration error:', error);
+				const errorMessage = handleRegistrationError(error);
+				showToast(errorMessage, 'error');
+			});
+	}, [formData, filterState.selectedPsychologistId, showToast, router, userType]);
 
-			showToast('Cadastro realizado com sucesso!', 'success');
-			setTimeout(() => router.replace('/(auth)/login'), 1500);
-		} catch (error: any) {
-			console.error(error);
-			const errorMessage = error.response?.data || 'Falha ao realizar cadastro.';
-			showToast(typeof errorMessage === 'string' ? errorMessage : 'Falha ao realizar cadastro.', 'error');
-		}
-	};
-
-	const formatCrp = (text: string) => {
-		const cleaned = text.replace(/\D/g, '');
-		if (cleaned.length > 2) {
-			return `${cleaned.slice(0, 2)}/${cleaned.slice(2, 7)}`;
-		}
-		return cleaned;
-	};
-
-	const handleCrpChange = (text: string) => {
-		const formatted = formatCrp(text);
-		setCrp(formatted);
-	};
-
+	// ============= RENDER COMPONENTS =============
 	const renderAuthStep = () => {
-		const isNextDisabled = !(username && password && confirmPassword && name) || usernameHelper?.type === 'error' || isCheckingUsername || passwordHelper?.type === 'error';
+		const isNextDisabled = 
+			!(formData.username && formData.password && formData.confirmPassword && formData.name) ||
+			usernameHelper?.type === 'error' ||
+			isCheckingUsername ||
+			passwordHelper?.type === 'error';
 
 		return (
 			<View style={styles.formSection}>
@@ -205,8 +375,8 @@ export default function Register() {
 				<View style={styles.inputGroup}>
 					<GlassInput
 						placeholder="Nome Completo"
-						value={name}
-						onChangeText={setName}
+						value={formData.name}
+						onChangeText={(text) => updateFormData({name: text})}
 						autoCapitalize="words"
 					/>
 
@@ -214,9 +384,9 @@ export default function Register() {
 						helperText={usernameHelper}
 						placeholder="Email"
 						keyboardType="email-address"
-						value={username}
+						value={formData.username}
 						onChangeText={(text) => {
-							setUsername(text);
+							updateFormData({username: text});
 							setUsernameHelper(null);
 						}}
 						onBlur={checkUsername}
@@ -230,22 +400,22 @@ export default function Register() {
 
 					<GlassInput
 						placeholder="Senha"
-						value={password}
-						onChangeText={setPassword}
+						value={formData.password}
+						onChangeText={(text) => updateFormData({password: text})}
 						secureTextEntry
 					/>
 					<GlassInput
 						helperText={passwordHelper}
 						placeholder="Repetir Senha"
-						value={confirmPassword}
-						onChangeText={setConfirmPassword}
+						value={formData.confirmPassword}
+						onChangeText={(text) => updateFormData({confirmPassword: text})}
 						secureTextEntry
 					/>
 				</View>
 
 				<TouchableOpacity
 					style={[styles.primaryButton, {backgroundColor: tintColor}, isNextDisabled && styles.buttonDisabled]}
-					onPress={handleNext}
+					onPress={handleNextStep}
 					disabled={isNextDisabled}
 				>
 					<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
@@ -262,14 +432,14 @@ export default function Register() {
 					style={[
 						styles.typeButton,
 						{borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'},
-						userType === 'patient' && {backgroundColor: tintColor}
+						userType === USER_TYPES.PATIENT && {backgroundColor: tintColor}
 					]}
-					onPress={() => setUserType('patient')}
+					onPress={() => setUserType(USER_TYPES.PATIENT)}
 				>
 					<Text style={[
 						styles.typeButtonText,
 						{color: tintColor},
-						userType === 'patient' && styles.typeButtonTextSelected
+						userType === USER_TYPES.PATIENT && styles.typeButtonTextSelected
 					]}>Paciente</Text>
 				</TouchableOpacity>
 
@@ -277,20 +447,20 @@ export default function Register() {
 					style={[
 						styles.typeButton,
 						{borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'},
-						userType === 'psychologist' && {backgroundColor: tintColor}
+						userType === USER_TYPES.PSYCHOLOGIST && {backgroundColor: tintColor}
 					]}
-					onPress={() => setUserType('psychologist')}
+					onPress={() => setUserType(USER_TYPES.PSYCHOLOGIST)}
 				>
 					<Text style={[
 						styles.typeButtonText,
 						{color: tintColor},
-						userType === 'psychologist' && styles.typeButtonTextSelected
+						userType === USER_TYPES.PSYCHOLOGIST && styles.typeButtonTextSelected
 					]}>Psicólogo</Text>
 				</TouchableOpacity>
 			</View>
 			<TouchableOpacity
 				style={[styles.primaryButton, {backgroundColor: tintColor}, !userType && styles.buttonDisabled]}
-				onPress={handleNext}
+				onPress={handleNextStep}
 				disabled={!userType}
 			>
 				<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
@@ -299,23 +469,23 @@ export default function Register() {
 	);
 
 	const renderPsychologistDetails = () => {
-		const isFinishDisabled = !crp || !uf;
+		const isFinishDisabled = !formData.crp || !formData.uf;
 		return (
 			<View style={styles.formSection}>
 				<Text style={[styles.stepTitle, {color: textColor}]}>Dados Profissionais</Text>
 				<View style={styles.inputGroup}>
 					<GlassInput
 						placeholder="CRP (ex: 06/12345)"
-						value={crp}
-						onChangeText={handleCrpChange}
+						value={formData.crp}
+						onChangeText={(text) => updateFormData({crp: formatCrpNumber(text)})}
 						keyboardType="numeric"
-						maxLength={8}
+						maxLength={CRP_FORMAT.MAX_LENGTH}
 					/>
 					<GlassInput
 						placeholder="UF (ex: SP)"
-						value={uf}
-						onChangeText={setUf}
-						maxLength={2}
+						value={formData.uf}
+						onChangeText={(text) => updateFormData({uf: text})}
+						maxLength={UF_MAX_LENGTH}
 						autoCapitalize="characters"
 					/>
 				</View>
@@ -330,19 +500,58 @@ export default function Register() {
 		);
 	};
 
-	const renderPatientDetails = () => {
-		const filteredPsychologists = psychologists.filter(p =>
-			p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.crp.includes(searchQuery)
+	const getFilteredPsychologists = (): Psychologist[] => {
+		return psychologists.filter(psychologist =>
+			psychologist.name.toLowerCase().includes(filterState.searchQuery.toLowerCase()) ||
+			psychologist.crp.includes(filterState.searchQuery)
 		);
+	};
+
+	const renderPsychologistItem = (psychologist: Psychologist) => {
+		const isSelected = filterState.selectedPsychologistId === psychologist.id;
+
+		return (
+			<View key={psychologist.id} style={[styles.psychologistItem, {
+				borderColor: borderColor,
+				backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'
+			}]}>
+				<View style={{marginRight: 12}}>
+					<Avatar uri={psychologist.profilePictureUrl} size={40} name={psychologist.name} />
+				</View>
+				<View style={styles.psychologistInfo}>
+					<Text style={[styles.psychologistName, {color: textColor}]}>{psychologist.name}</Text>
+					<Text style={[styles.psychologistCrp, {color: mutedColor}]}>CRP: {psychologist.crp}</Text>
+				</View>
+				<TouchableOpacity
+					style={[
+						styles.linkButton,
+						{backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#eee'},
+						isSelected && {backgroundColor: '#34C759'}
+					]}
+					onPress={() => updateFilterState({selectedPsychologistId: psychologist.id})}
+				>
+					<Text style={[
+						styles.linkButtonText,
+						{color: textColor},
+						isSelected && {color: '#fff'}
+					]}>
+						{isSelected ? 'Vinculado' : 'Vincular'}
+					</Text>
+				</TouchableOpacity>
+			</View>
+		);
+	};
+
+	const renderPatientDetails = () => {
+		const filteredPsychologists = getFilteredPsychologists();
 
 		return (
 			<View style={[styles.formSection, {flex: 1}]}>
 				<Text style={[styles.stepTitle, {color: textColor}]}>Vincular Psicólogo</Text>
 				<GlassInput
 					placeholder="Buscar por nome ou CRP"
-					value={searchQuery}
-					onChangeText={setSearchQuery}
+					value={filterState.searchQuery}
+					onChangeText={(text) => updateFilterState({searchQuery: text})}
 				/>
 
 				{isLoadingPsychologists ? (
@@ -353,44 +562,46 @@ export default function Register() {
 						keyExtractor={(item) => item.id.toString()}
 						style={styles.list}
 						contentContainerStyle={{gap: 10}}
-						renderItem={({item}) => (
-							<View style={[styles.psychologistItem, {
-								borderColor: borderColor,
-								backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'
-							}]}>
-								<View style={{marginRight: 12}}>
-									<Avatar uri={item.profilePictureUrl} size={40} name={item.name} />
-								</View>
-								<View style={styles.psychologistInfo}>
-									<Text style={[styles.psychologistName, {color: textColor}]}>{item.name}</Text>
-									<Text style={[styles.psychologistCrp, {color: mutedColor}]}>CRP: {item.crp}</Text>
-								</View>
-								<TouchableOpacity
-									style={[
-										styles.linkButton,
-										{backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#eee'},
-										selectedPsychologistId === item.id && {backgroundColor: '#34C759'}
-									]}
-									onPress={() => setSelectedPsychologistId(item.id)}
-								>
-									<Text style={[
-										styles.linkButtonText,
-										{color: textColor},
-										selectedPsychologistId === item.id && {color: '#fff'}
-									]}>
-										{selectedPsychologistId === item.id ? 'Vinculado' : 'Vincular'}
-									</Text>
-								</TouchableOpacity>
-							</View>
-						)}
+						renderItem={({item}) => renderPsychologistItem(item)}
 					/>
 				)}
 
-				<TouchableOpacity style={[styles.primaryButton, {backgroundColor: tintColor}]} onPress={handleRegister}>
+				<TouchableOpacity 
+					style={[styles.primaryButton, {backgroundColor: tintColor}]} 
+					onPress={handleRegister}
+				>
 					<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
 				</TouchableOpacity>
 			</View>
 		);
+	};
+
+	const renderHeader = () => (
+		<View style={styles.header}>
+			<TouchableOpacity 
+				onPress={handleBackButton} 
+				style={styles.backButton}
+			>
+				<Text style={[styles.backButtonText, {color: mutedColor}]}>
+					{currentStep === 0 ? 'Cancelar' : 'Voltar'}
+				</Text>
+			</TouchableOpacity>
+		</View>
+	);
+
+	const renderStep = () => {
+		switch (currentStep) {
+		case REGISTRATION_STEPS.AUTH:
+			return renderAuthStep();
+		case REGISTRATION_STEPS.USER_TYPE:
+			return renderTypeStep();
+		case REGISTRATION_STEPS.DETAILS:
+			return userType === USER_TYPES.PSYCHOLOGIST 
+				? renderPsychologistDetails()
+				: renderPatientDetails();
+		default:
+			return null;
+		}
 	};
 
 	return (
@@ -402,29 +613,15 @@ export default function Register() {
 				style={styles.keyboardView}
 			>
 				<AnimatedEntry style={styles.contentContainer}>
-					<View style={styles.header}>
-						{step > 0 && (
-							<TouchableOpacity onPress={() => setStep(step - 1)} style={styles.backButton}>
-								<Text style={[styles.backButtonText, {color: mutedColor}]}>Voltar</Text>
-							</TouchableOpacity>
-						)}
-						{step === 0 && (
-							<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-								<Text style={[styles.backButtonText, {color: mutedColor}]}>Cancelar</Text>
-							</TouchableOpacity>
-						)}
-					</View>
-
-					{step === 0 && renderAuthStep()}
-					{step === 1 && renderTypeStep()}
-					{step === 2 && userType === 'psychologist' && renderPsychologistDetails()}
-					{step === 2 && userType === 'patient' && renderPatientDetails()}
+					{renderHeader()}
+					{renderStep()}
 				</AnimatedEntry>
 			</KeyboardAvoidingView>
 		</ThemedView>
 	);
 }
 
+// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
