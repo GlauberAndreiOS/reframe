@@ -34,6 +34,7 @@ const TAB_SCREENS = [
 
 const TABS_OPTIONS = {
 	headerShown: false,
+	animation: 'shift',
 } as const;
 
 // ============= PATIENT TABS LAYOUT COMPONENT =============

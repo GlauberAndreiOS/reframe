@@ -63,6 +63,7 @@ export default function QuestionnairesScreen() {
 	// ============= STATE =============
 	const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
 	const [toast, setToast] = useState<ToastState | null>(null);
 
 	// ============= EFFECTS =============
@@ -75,14 +76,12 @@ export default function QuestionnairesScreen() {
 		}
 	}, [toast]);
 
-	useFocusEffect(
-		useCallback(() => {
-			fetchQuestionnaires();
-		}, [])
-	);
-
 	// ============= HANDLERS =============
-	const fetchQuestionnaires = useCallback(() => {
+	const fetchQuestionnaires = useCallback((showLoading = false) => {
+		if (showLoading) {
+			setLoading(true);
+		}
+
 		api.get(API_ENDPOINTS.GET_QUESTIONNAIRES, {
 			headers: {Authorization: `Bearer ${token}`},
 		})
@@ -94,9 +93,23 @@ export default function QuestionnairesScreen() {
 				setToast({message: MESSAGES.LOAD_ERROR, type: 'error'});
 			})
 			.finally(() => {
-				setLoading(false);
+				if (showLoading) {
+					setLoading(false);
+				}
+				setRefreshing(false);
 			});
 	}, [token]);
+
+	const handleRefresh = useCallback(() => {
+		setRefreshing(true);
+		fetchQuestionnaires();
+	}, [fetchQuestionnaires]);
+
+	useFocusEffect(
+		useCallback(() => {
+			fetchQuestionnaires(true);
+		}, [fetchQuestionnaires])
+	);
 
 	// ============= UTILITY FUNCTIONS =============
 	const formatDate = (dateString: string): string => {
@@ -186,6 +199,8 @@ export default function QuestionnairesScreen() {
 					contentContainerStyle={styles.listContent}
 					showsVerticalScrollIndicator={false}
 					ListEmptyComponent={renderEmptyComponent}
+					refreshing={refreshing}
+					onRefresh={handleRefresh}
 				/>
 			)}
 		</ThemedView>
@@ -225,6 +240,7 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 	},
 	listContent: {
+		flexGrow: 1,
 		paddingBottom: 80,
 	},
 	loader: {

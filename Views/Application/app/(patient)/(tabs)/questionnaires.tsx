@@ -53,6 +53,7 @@ export default function PatientQuestionnairesScreen() {
 	// ============= STATE =============
 	const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
 	const [toast, setToast] = useState<ToastState | null>(null);
 
 	// ============= EFFECTS =============
@@ -66,7 +67,11 @@ export default function PatientQuestionnairesScreen() {
 	}, [toast]);
 
 	// ============= HANDLERS =============
-	const fetchQuestionnaires = useCallback(() => {
+	const fetchQuestionnaires = useCallback((showLoading = false) => {
+		if (showLoading) {
+			setLoading(true);
+		}
+
 		api.get(API_ENDPOINTS.GET_QUESTIONNAIRES, {
 			headers: {Authorization: `Bearer ${token}`},
 		})
@@ -78,11 +83,19 @@ export default function PatientQuestionnairesScreen() {
 				setToast({message: MESSAGES.LOAD_ERROR, type: 'error'});
 			})
 			.finally(() => {
-				setLoading(false);
+				if (showLoading) {
+					setLoading(false);
+				}
+				setRefreshing(false);
 			});
 	}, [token]);
 
 	useEffect(() => {
+		fetchQuestionnaires(true);
+	}, [fetchQuestionnaires]);
+
+	const handleRefresh = useCallback(() => {
+		setRefreshing(true);
 		fetchQuestionnaires();
 	}, [fetchQuestionnaires]);
 
@@ -144,6 +157,8 @@ export default function PatientQuestionnairesScreen() {
 					contentContainerStyle={styles.listContent}
 					showsVerticalScrollIndicator={false}
 					ListEmptyComponent={renderEmptyComponent}
+					refreshing={refreshing}
+					onRefresh={handleRefresh}
 				/>
 			)}
 		</ThemedView>
@@ -160,6 +175,7 @@ const styles = StyleSheet.create({
 		marginTop: 40,
 	},
 	listContent: {
+		flexGrow: 1,
 		paddingBottom: 80,
 	},
 	loader: {

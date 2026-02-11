@@ -1,5 +1,13 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, FlatList, ScrollView, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
+	ScrollView,
+	StyleSheet,
+	TouchableOpacity,
+	View,
+} from 'react-native';
 import {useLocalSearchParams, useRouter} from 'expo-router';
 import {ThemedView, ThemedText, Card, IconSymbol, AmbientBackground, Toast, ConfirmModal} from '@/components';
 import {useAuth} from '@/context';
@@ -104,6 +112,7 @@ export default function QuestionnaireDetailScreen() {
 	const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
 	const [applications, setApplications] = useState<Application[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
 	const [activeTab, setActiveTab] = useState<typeof TAB_NAMES.DETAILS | typeof TAB_NAMES.APPLICATIONS>(
 		TAB_NAMES.DETAILS,
 	);
@@ -122,12 +131,16 @@ export default function QuestionnaireDetailScreen() {
 
 	useEffect(() => {
 		if (id) {
-			fetchData();
+			fetchData(true);
 		}
 	}, [id, token]);
 
 	// ============= HANDLERS =============
-	const fetchData = useCallback(() => {
+	const fetchData = useCallback((showLoading = false) => {
+		if (showLoading) {
+			setLoading(true);
+		}
+
 		Promise.all([
 			api.get(`${API_ENDPOINTS.GET_QUESTIONNAIRE}/${id}`, {
 				headers: {Authorization: `Bearer ${token}`},
@@ -145,9 +158,17 @@ export default function QuestionnaireDetailScreen() {
 				setToast({message: MESSAGES.LOAD_ERROR, type: 'error'});
 			})
 			.finally(() => {
-				setLoading(false);
+				if (showLoading) {
+					setLoading(false);
+				}
+				setRefreshing(false);
 			});
 	}, [id, token]);
+
+	const handleRefresh = useCallback(() => {
+		setRefreshing(true);
+		fetchData();
+	}, [fetchData]);
 
 	const handleDelete = () => {
 		api.delete(`${API_ENDPOINTS.DELETE_QUESTIONNAIRE}/${id}`, {
@@ -260,7 +281,10 @@ export default function QuestionnaireDetailScreen() {
 	};
 
 	const renderDetailsTab = () => (
-		<ScrollView style={styles.content}>
+		<ScrollView
+			style={styles.content}
+			refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh}/>}
+		>
 			<ThemedText type="defaultSemiBold" style={styles.sectionTitle}>
 				{MESSAGES.SECTION_QUESTIONS}
 			</ThemedText>
@@ -276,6 +300,7 @@ export default function QuestionnaireDetailScreen() {
 			keyExtractor={(item) => item.patientId}
 			contentContainerStyle={styles.listContent}
 			ListEmptyComponent={<ThemedText style={styles.emptyText}>{MESSAGES.EMPTY_PATIENTS}</ThemedText>}
+			refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh}/>}
 		/>
 	);
 
