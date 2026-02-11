@@ -31,9 +31,6 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Sync app version
-        run: npm run sync-version
-
       - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
