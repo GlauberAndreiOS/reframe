@@ -25,23 +25,21 @@ public class ProfileController(ApplicationDbContext context, IWebHostEnvironment
         var uploadsFolder = Path.Combine(env.WebRootPath, "uploads");
         if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
 
-        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+        var fileExtension = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(fileExtension)) return BadRequest("Invalid file extension.");
+
+        var fileName = $"{userId}{fileExtension}";
         var filePath = Path.Combine(uploadsFolder, fileName);
+
+        // Keep a single profile picture per user using userId-based filename.
+        var existingUserPictures = Directory.GetFiles(uploadsFolder, $"{userId}.*");
+        foreach (var existingFilePath in existingUserPictures)
+            if (!string.Equals(existingFilePath, filePath, StringComparison.OrdinalIgnoreCase))
+                System.IO.File.Delete(existingFilePath);
 
         await using (var stream = new FileStream(filePath, FileMode.Create))
         {
             await file.CopyToAsync(stream);
-        }
-
-        // Delete old picture if it exists
-        if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
-        {
-            var oldFileName = Path.GetFileName(user.ProfilePictureUrl);
-            var oldFilePath = Path.Combine(uploadsFolder, oldFileName);
-            if (System.IO.File.Exists(oldFilePath))
-            {
-                System.IO.File.Delete(oldFilePath);
-            }
         }
 
         user.ProfilePictureUrl = $"/uploads/{fileName}";

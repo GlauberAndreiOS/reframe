@@ -26,7 +26,8 @@ public class PsychologistController(ApplicationDbContext context) : ControllerBa
             psychologist.Id,
             Name = psychologist.User?.Name ?? string.Empty,
             psychologist.CRP,
-            Email = psychologist.User?.Username ?? string.Empty
+            Email = psychologist.User?.Username ?? string.Empty,
+            ProfilePictureUrl = psychologist.User?.ProfilePictureUrl
         });
     }
 
@@ -46,7 +47,8 @@ public class PsychologistController(ApplicationDbContext context) : ControllerBa
         var result = psychologist.Patients.Select(p => new
         {
             p.Id,
-            Name = p.User?.Name ?? string.Empty
+            Name = p.User?.Name ?? string.Empty,
+            ProfilePictureUrl = p.User?.ProfilePictureUrl
         });
 
         return Ok(result);

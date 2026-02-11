@@ -38,3 +38,6 @@ Views/Application/ios/
 # System Files
 .DS_Store
 Thumbs.db
+
+# Static Files
+wwwroot/

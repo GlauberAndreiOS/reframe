@@ -49,6 +49,8 @@ builder.Services.AddControllers()
 #region OpenAPI (.NET 10)
 
 builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 #endregion
 
@@ -207,20 +209,26 @@ if (cliCommand is "seed" or "reset-db" or "force-seed")
 #region WEB MODE
 
 if (app.Environment.IsDevelopment()) app.MapOpenApi("/openapi/v1.json");
+app.UseSwagger();
+app.UseSwaggerUI();
+app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
 
 #endregion
 
-// Configure static files for uploads
+// Public uploads route (anonymous): /uploads/{file}
 var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
 if (!Directory.Exists(uploadsPath))
 {
     Directory.CreateDirectory(uploadsPath);
 }
 
-app.UseStaticFiles(new StaticFileOptions
+app.Map("/uploads", uploadsApp =>
 {
-    FileProvider = new PhysicalFileProvider(uploadsPath),
-    RequestPath = "/uploads"
+    uploadsApp.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uploadsPath),
+        RequestPath = ""
+    });
 });
 
 app.UseRouting();

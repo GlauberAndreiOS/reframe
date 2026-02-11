@@ -80,12 +80,14 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
         {
             patient.Id,
             Name = patient.User?.Name ?? string.Empty,
+            ProfilePictureUrl = patient.User?.ProfilePictureUrl,
             Psychologist = patient.Psychologist != null
                 ? new
                 {
                     patient.Psychologist.Id,
                     Name = patient.Psychologist.User?.Name ?? string.Empty,
-                    patient.Psychologist.CRP
+                    patient.Psychologist.CRP,
+                    ProfilePictureUrl = patient.Psychologist.User?.ProfilePictureUrl
                 }
                 : null
         });

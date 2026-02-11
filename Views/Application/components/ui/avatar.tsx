@@ -19,6 +19,17 @@ export function Avatar({uri, size = 100, onUpload, editable = false, name}: Avat
 	const backgroundColor = useThemeColor({}, 'card');
 	const textColor = useThemeColor({}, 'text');
 
+	const getBackendOrigin = () => {
+		const apiBase = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5088/api';
+
+		try {
+			const parsedUrl = new URL(apiBase);
+			return `${parsedUrl.protocol}//${parsedUrl.host}`;
+		} catch {
+			return apiBase.replace(/\/api\/?$/i, '');
+		}
+	};
+
 	const handlePickImage = async () => {
 		if (!editable || !onUpload) return;
 
@@ -61,8 +72,8 @@ export function Avatar({uri, size = 100, onUpload, editable = false, name}: Avat
 		return name.substring(0, 2).toUpperCase();
 	};
 
-	const imageUrl = uri?.startsWith('/') 
-		? `${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.5:5088'}${uri}` 
+	const imageUrl = uri?.startsWith('/')
+		? `${getBackendOrigin()}${uri}`
 		: uri;
 
 	return (

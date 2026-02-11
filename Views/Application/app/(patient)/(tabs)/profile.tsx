@@ -76,23 +76,22 @@ export default function ProfileScreen() {
 			});
 	}, [showToast]);
 
-	const handleUpload = (formData: any) => {
-		api.post(API_ENDPOINTS.UPLOAD_PICTURE, formData, {
-			headers: {
-				'Content-Type': 'multipart/form-data',
-				Authorization: `Bearer ${token}`,
-			},
-		})
-			.then((response) => {
-				if (profile) {
-					setProfile({...profile, profilePictureUrl: response.data.url});
-				}
-				showToast(MESSAGES.UPLOAD_SUCCESS, 'success');
-			})
-			.catch((error) => {
-				console.error('Upload error:', error);
-				showToast(MESSAGES.UPLOAD_ERROR, 'error');
+	const handleUpload = async (formData: any): Promise<void> => {
+		try {
+			const response = await api.post(API_ENDPOINTS.UPLOAD_PICTURE, formData, {
+				headers: {
+					'Content-Type': 'multipart/form-data',
+					Authorization: `Bearer ${token}`,
+				},
 			});
+			if (profile) {
+				setProfile({...profile, profilePictureUrl: response.data.url});
+			}
+			showToast(MESSAGES.UPLOAD_SUCCESS, 'success');
+		} catch (error) {
+			console.error('Upload error:', error);
+			showToast(MESSAGES.UPLOAD_ERROR, 'error');
+		}
 	};
 
 	const handleUpdatePsychologist = (psychologistId: number | null) => {

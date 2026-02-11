@@ -28,8 +28,9 @@ interface QuestionnaireResponse {
 	questionnaire: Questionnaire;
 	answers: Answer[];
 	patient: {
-		user: {
-			name: string;
+		name?: string;
+		user?: {
+			name?: string;
 		};
 		profilePictureUrl?: string;
 	};
@@ -118,6 +119,11 @@ export default function ViewResponseScreen() {
 	// ============= UTILITY FUNCTIONS =============
 	const getAnswerForQuestion = (questionTitle: string) => {
 		return response?.answers.find((a) => a.questionTitle === questionTitle)?.value;
+	};
+
+	const getPatientName = () => {
+		console.log(response)
+		return response?.patient?.name || response?.patient?.user?.name || MESSAGES.UNKNOWN_PATIENT;
 	};
 
 	// ============= RENDER FUNCTIONS =============
@@ -249,14 +255,14 @@ export default function ViewResponseScreen() {
 							uri={response.patient?.profilePictureUrl}
 							size={AVATAR_SIZE}
 							editable={false}
-							name={response.patient?.user?.name}
+							name={getPatientName()}
 						/>
 					</View>
 					<ThemedText type="subtitle" numberOfLines={1}>
 						{response.questionnaire.title}
 					</ThemedText>
 					<ThemedText style={styles.headerSubtitle}>
-						{MESSAGES.RESPONSE_LABEL} {response.patient?.user?.name || MESSAGES.UNKNOWN_PATIENT}{' '}
+						{MESSAGES.RESPONSE_LABEL} {getPatientName()}{' '}
 						{MESSAGES.RESPONSE_ON} {new Date(response.submittedAt).toLocaleDateString()}
 					</ThemedText>
 				</View>

@@ -140,6 +140,10 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
 
                 var questionnaires = await context.Questionnaires
                     .Where(q => q.PsychologistId == patient.PsychologistId && q.TargetPatientId == patient.Id)
+                    .Where(q => context.Questionnaires.Any(master =>
+                        master.PsychologistId == q.PsychologistId &&
+                        master.TargetPatientId == null &&
+                        master.Title == q.Title))
                     .OrderByDescending(q => q.CreatedAt)
                     .ToListAsync();
 
@@ -346,7 +350,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
     
     [HttpGet("Response/{responseId}")]
     [Authorize(Roles = "Psychologist")]
-    public async Task<ActionResult<QuestionnaireResponse>> GetResponse(Guid responseId)
+    public async Task<ActionResult<object>> GetResponse(Guid responseId)
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
@@ -359,10 +363,28 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
             .FirstOrDefaultAsync(r => r.Id == responseId);
 
         if (response == null) return NotFound();
+        if (response.Questionnaire == null) return NotFound("Questionnaire not found.");
 
         if (response.Questionnaire.PsychologistId != psychologist.Id) return Forbid();
 
-        return Ok(response);
+        return Ok(new
+        {
+            response.Id,
+            response.SubmittedAt,
+            Questionnaire = new
+            {
+                response.Questionnaire.Id,
+                response.Questionnaire.Title,
+                response.Questionnaire.Questions
+            },
+            response.Answers,
+            Patient = new
+            {
+                response.PatientId,
+                Name = response.Patient?.User?.Name,
+                ProfilePictureUrl = response.Patient?.User?.ProfilePictureUrl
+            }
+        });
     }
     
     [HttpGet("Templates")]
