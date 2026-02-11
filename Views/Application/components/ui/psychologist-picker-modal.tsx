@@ -16,7 +16,7 @@ import {useThemeColor} from '@/hooks/use-theme-color';
 import {IconSymbol} from '@/components/ui/icon-symbol';
 
 interface Psychologist {
-    id: number;
+    id: string;
     name: string;
     crp: string;
 }
@@ -24,8 +24,8 @@ interface Psychologist {
 interface Props {
     visible: boolean;
     onClose: () => void;
-    onSelect: (psychologistId: number | null) => void;
-    currentPsychologistId?: number;
+    onSelect: (psychologistId: string | null) => void;
+    currentPsychologistId?: string;
     showUnlinkOption?: boolean;
     title?: string;
 }

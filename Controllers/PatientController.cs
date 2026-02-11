@@ -24,10 +24,10 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
         var psychologist = await context.Psychologists.FindAsync(psychologistId);
         if (psychologist == null) return NotFound("Psychologist not found.");
 
-        patient.PsychologistId = psychologistId;
+        patient.PendingPsychologistId = psychologistId;
         await context.SaveChangesAsync();
 
-        return Ok("Successfully linked to psychologist.");
+        return Ok("Link request sent successfully.");
     }
 
 
@@ -40,16 +40,29 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
 
         if (patient == null) return NotFound("Patient profile not found.");
 
-        if (dto.PsychologistId.HasValue)
+        if (!dto.PsychologistId.HasValue)
         {
-            var psychologist = await context.Psychologists.FindAsync(dto.PsychologistId.Value);
-            if (psychologist == null) return NotFound("Psychologist not found.");
+            patient.PsychologistId = null;
+            patient.PendingPsychologistId = null;
+            await context.SaveChangesAsync();
+
+            return Ok("Psychologist link removed.");
         }
 
-        patient.PsychologistId = dto.PsychologistId;
+        var psychologist = await context.Psychologists.FindAsync(dto.PsychologistId.Value);
+        if (psychologist == null) return NotFound("Psychologist not found.");
+
+        if (patient.PsychologistId == dto.PsychologistId.Value)
+        {
+            patient.PendingPsychologistId = null;
+            await context.SaveChangesAsync();
+            return Ok("Patient is already linked to this psychologist.");
+        }
+
+        patient.PendingPsychologistId = dto.PsychologistId;
         await context.SaveChangesAsync();
 
-        return Ok("Psychologist link updated successfully.");
+        return Ok("Link request sent successfully.");
     }
 
 
@@ -66,6 +79,8 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
             .Include(p => p.User)
             .Include(p => p.Psychologist)
             .ThenInclude(psy => psy!.User)
+            .Include(p => p.PendingPsychologist)
+            .ThenInclude(psy => psy!.User)
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (patient == null)
@@ -81,6 +96,7 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
             patient.Id,
             Name = patient.User?.Name ?? string.Empty,
             ProfilePictureUrl = patient.User?.ProfilePictureUrl,
+            HasPendingLinkRequest = patient.PendingPsychologistId != null,
             Psychologist = patient.Psychologist != null
                 ? new
                 {
@@ -88,6 +104,15 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
                     Name = patient.Psychologist.User?.Name ?? string.Empty,
                     patient.Psychologist.CRP,
                     ProfilePictureUrl = patient.Psychologist.User?.ProfilePictureUrl
+                }
+                : null,
+            PendingPsychologist = patient.PendingPsychologist != null
+                ? new
+                {
+                    patient.PendingPsychologist.Id,
+                    Name = patient.PendingPsychologist.User?.Name ?? string.Empty,
+                    patient.PendingPsychologist.CRP,
+                    ProfilePictureUrl = patient.PendingPsychologist.User?.ProfilePictureUrl
                 }
                 : null
         });

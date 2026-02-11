@@ -44,6 +44,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(p => p.PsychologistId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        modelBuilder.Entity<Patient>()
+            .HasOne(p => p.PendingPsychologist)
+            .WithMany()
+            .HasForeignKey(p => p.PendingPsychologistId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         modelBuilder.Entity<AutomaticThought>()
             .HasOne(at => at.Patient)
             .WithMany(p => p.AutomaticThoughts)

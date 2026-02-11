@@ -16,5 +16,9 @@ public class Patient
 
     [ForeignKey("PsychologistId")] public Psychologist? Psychologist { get; set; }
 
+    public Guid? PendingPsychologistId { get; set; }
+
+    [ForeignKey("PendingPsychologistId")] public Psychologist? PendingPsychologist { get; set; }
+
     public ICollection<AutomaticThought> AutomaticThoughts { get; set; } = new List<AutomaticThought>();
 }

@@ -8,11 +8,18 @@ import {api} from '@/services';
 
 // ============= TYPES & INTERFACES =============
 interface PatientProfile {
-	id: number;
+	id: string;
 	name: string;
 	profilePictureUrl?: string;
+	hasPendingLinkRequest?: boolean;
 	psychologist?: {
-		id: number;
+		id: string;
+		name: string;
+		crp: string;
+		profilePictureUrl?: string;
+	};
+	pendingPsychologist?: {
+		id: string;
 		name: string;
 		crp: string;
 		profilePictureUrl?: string;
@@ -31,9 +38,11 @@ const MESSAGES = {
 	UPLOAD_SUCCESS: 'Foto de perfil atualizada!',
 	UPLOAD_ERROR: 'Erro ao atualizar foto.',
 	LINK_REMOVED: 'Vínculo removido com sucesso!',
-	LINK_UPDATED: 'Vínculo atualizado com sucesso!',
+	LINK_REQUESTED: 'Solicitação de vínculo enviada com sucesso!',
 	LINK_ERROR: 'Falha ao atualizar vínculo.',
 	NO_PSYCHOLOGIST: 'Nenhum psicólogo vinculado',
+	PENDING_TITLE: 'SOLICITACAO PENDENTE',
+	PENDING_MESSAGE: 'Aguardando aprovacao do psicologo',
 	LOGOUT: 'Sair da conta',
 	SECTION_TITLE: 'PSICÓLOGO VINCULADO',
 } as const;
@@ -50,6 +59,7 @@ export default function ProfileScreen() {
 	const borderColor = useThemeColor({}, 'border');
 	const mutedColor = useThemeColor({}, 'muted');
 	const cardColor = useThemeColor({}, 'card');
+	const warningColor = '#F59E0B';
 
 	// ============= STATE =============
 	const [profile, setProfile] = useState<PatientProfile | null>(null);
@@ -94,12 +104,12 @@ export default function ProfileScreen() {
 		}
 	};
 
-	const handleUpdatePsychologist = (psychologistId: number | null) => {
+	const handleUpdatePsychologist = (psychologistId: string | null) => {
 		setIsPickerVisible(false);
 
 		api.put(API_ENDPOINTS.UPDATE_PSYCHOLOGIST, {psychologistId})
 			.then(() => {
-				const message = psychologistId === null ? MESSAGES.LINK_REMOVED : MESSAGES.LINK_UPDATED;
+				const message = psychologistId === null ? MESSAGES.LINK_REMOVED : MESSAGES.LINK_REQUESTED;
 				showToast(message, 'success');
 				fetchProfile();
 			})
@@ -158,6 +168,40 @@ export default function ProfileScreen() {
 		);
 	};
 
+	const renderPendingRequest = () => {
+		if (!profile?.hasPendingLinkRequest || !profile.pendingPsychologist) return null;
+
+		return (
+			<View style={[styles.pendingCard, {borderColor: warningColor, backgroundColor: warningColor + '14'}]}>
+				<View style={styles.pendingHeader}>
+					<IconSymbol name="clock.fill" size={16} color={warningColor}/>
+					<ThemedText style={[styles.pendingTitle, {color: warningColor}]}>{MESSAGES.PENDING_TITLE}</ThemedText>
+				</View>
+				<View style={styles.pendingContent}>
+					<View style={{marginRight: 12}}>
+						<Avatar
+							uri={profile.pendingPsychologist.profilePictureUrl}
+							size={40}
+							editable={false}
+							name={profile.pendingPsychologist.name}
+						/>
+					</View>
+					<View style={{flex: 1}}>
+						<ThemedText style={styles.psychologistName} numberOfLines={1}>
+							{profile.pendingPsychologist.name}
+						</ThemedText>
+						<ThemedText style={[styles.crp, {color: mutedColor}]}>
+							CRP: {profile.pendingPsychologist.crp}
+						</ThemedText>
+						<ThemedText style={[styles.pendingDescription, {color: mutedColor}]}>
+							{MESSAGES.PENDING_MESSAGE}
+						</ThemedText>
+					</View>
+				</View>
+			</View>
+		);
+	};
+
 	if (loading) {
 		return (
 			<ThemedView style={styles.loadingContainer}>
@@ -190,6 +234,8 @@ export default function ProfileScreen() {
 						<ThemedText style={[styles.sectionTitle, {color: mutedColor}]}>
 							{MESSAGES.SECTION_TITLE}
 						</ThemedText>
+
+						{renderPendingRequest()}
 
 						<View
 							style={[
@@ -262,6 +308,32 @@ const styles = StyleSheet.create({
 		padding: 16,
 		borderRadius: 16,
 		borderWidth: 1,
+	},
+	pendingCard: {
+		padding: 14,
+		borderRadius: 14,
+		borderWidth: 1,
+		marginBottom: 12,
+	},
+	pendingHeader: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+		marginBottom: 10,
+	},
+	pendingTitle: {
+		fontSize: 12,
+		fontWeight: '700',
+		letterSpacing: 0.8,
+		textTransform: 'uppercase',
+	},
+	pendingContent: {
+		flexDirection: 'row',
+		alignItems: 'center',
+	},
+	pendingDescription: {
+		fontSize: 12,
+		marginTop: 2,
 	},
 	psychologistContainer: {
 		flexDirection: 'row',

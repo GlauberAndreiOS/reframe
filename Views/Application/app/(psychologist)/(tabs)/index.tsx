@@ -9,9 +9,10 @@ import {api} from '@/services';
 
 // ============= TYPES & INTERFACES =============
 interface Patient {
-	id: number;
+	id: string;
 	name: string;
 	profilePictureUrl?: string;
+	linkStatus?: 'Linked' | 'Pending';
 }
 
 interface ConfirmOptions {
@@ -27,6 +28,8 @@ const API_ENDPOINTS = {
 	GET_PATIENTS: '/Psychologist/patients',
 	UNLINK_PATIENT: '/Psychologist/patient',
 	TRANSFER_PATIENT: '/Psychologist/patient',
+	APPROVE_LINK: '/Psychologist/patient',
+	REJECT_LINK: '/Psychologist/patient',
 } as const;
 
 const MESSAGES = {
@@ -41,16 +44,29 @@ const MESSAGES = {
 	TRANSFER_SUCCESS: 'Paciente transferido com sucesso.',
 	TRANSFER_ERROR: 'Falha ao transferir paciente.',
 	TRANSFER_MODAL_TITLE: 'Transferir para...',
+	PENDING_BADGE: 'SOLICITACAO DE VINCULO',
+	APPROVE_TITLE: 'Aprovar Solicitacao',
+	APPROVE_MESSAGE_PREFIX: 'Deseja aprovar a solicitacao de vinculo de',
+	APPROVE_SUCCESS: 'Solicitacao aprovada com sucesso.',
+	APPROVE_ERROR: 'Falha ao aprovar solicitacao.',
+	REJECT_TITLE: 'Reprovar Solicitacao',
+	REJECT_MESSAGE_PREFIX: 'Deseja reprovar a solicitacao de vinculo de',
+	REJECT_SUCCESS: 'Solicitacao reprovada com sucesso.',
+	REJECT_ERROR: 'Falha ao reprovar solicitacao.',
 } as const;
 
 const ACTION_LABELS = {
 	REGISTROS: 'Registros',
 	TRANSFERIR: 'Transferir',
 	DESVINCULAR: 'Desvincular',
+	APROVAR: 'Aprovar',
+	REPROVAR: 'Reprovar',
 } as const;
 
 const COLOR_VALUES = {
 	DANGER: '#EF4444',
+	SUCCESS: '#16A34A',
+	WARNING: '#F59E0B',
 } as const;
 
 const ANIMATION_DELAY_MS = 100;
@@ -83,7 +99,7 @@ export default function PatientsScreen() {
 	const [patients, setPatients] = useState<Patient[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
-	const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+	const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
 	// ============= EFFECTS =============
 	useFocusEffect(
@@ -107,7 +123,7 @@ export default function PatientsScreen() {
 			});
 	}, []);
 
-	const handleUnlink = (patientId: number, patientName: string) => {
+	const handleUnlink = (patientId: string, patientName: string) => {
 		const confirmOptions: ConfirmOptions = {
 			title: MESSAGES.UNLINK_TITLE,
 			message: `${MESSAGES.UNLINK_MESSAGE_PREFIX} ${patientName}${MESSAGES.UNLINK_MESSAGE_SUFFIX}`,
@@ -128,12 +144,12 @@ export default function PatientsScreen() {
 		confirm(confirmOptions);
 	};
 
-	const openTransferModal = (patientId: number) => {
+	const openTransferModal = (patientId: string) => {
 		setSelectedPatientId(patientId);
 		setIsTransferModalVisible(true);
 	};
 
-	const handleTransfer = (targetPsychologistId: number | null) => {
+	const handleTransfer = (targetPsychologistId: string | null) => {
 		setIsTransferModalVisible(false);
 		if (!targetPsychologistId || !selectedPatientId) {
 			return;
@@ -153,6 +169,45 @@ export default function PatientsScreen() {
 			});
 	};
 
+	const handleApproveRequest = (patientId: string, patientName: string) => {
+		confirm({
+			title: MESSAGES.APPROVE_TITLE,
+			message: `${MESSAGES.APPROVE_MESSAGE_PREFIX} ${patientName}?`,
+			confirmText: ACTION_LABELS.APROVAR,
+			onConfirm: () => {
+				api.put(`${API_ENDPOINTS.APPROVE_LINK}/${patientId}/approve-link`)
+					.then(() => {
+						showToast(MESSAGES.APPROVE_SUCCESS, 'success');
+						fetchPatients();
+					})
+					.catch((error) => {
+						console.error('Failed to approve patient link request:', error);
+						showToast(MESSAGES.APPROVE_ERROR, 'error');
+					});
+			},
+		});
+	};
+
+	const handleRejectRequest = (patientId: string, patientName: string) => {
+		confirm({
+			title: MESSAGES.REJECT_TITLE,
+			message: `${MESSAGES.REJECT_MESSAGE_PREFIX} ${patientName}?`,
+			confirmText: ACTION_LABELS.REPROVAR,
+			isDestructive: true,
+			onConfirm: () => {
+				api.put(`${API_ENDPOINTS.REJECT_LINK}/${patientId}/reject-link`)
+					.then(() => {
+						showToast(MESSAGES.REJECT_SUCCESS, 'success');
+						fetchPatients();
+					})
+					.catch((error) => {
+						console.error('Failed to reject patient link request:', error);
+						showToast(MESSAGES.REJECT_ERROR, 'error');
+					});
+			},
+		});
+	};
+
 	// ============= RENDER FUNCTIONS =============
 	const renderActionButton = (iconName: string, label: string, color: string, onPress: () => void) => (
 		<TouchableOpacity style={styles.actionButton} onPress={onPress}>
@@ -162,36 +217,54 @@ export default function PatientsScreen() {
 	);
 
 	const renderPatientActions = (patient: Patient) => (
-		<View style={[styles.actions, {borderTopColor: borderColor + '33'}]}>
-			{renderActionButton(
-				'doc.text.fill',
-				ACTION_LABELS.REGISTROS,
-				tintColor,
-				() =>
-					router.push({
-						pathname: '/(psychologist)/patient/[id]',
-						params: {id: patient.id, name: patient.name},
-					})
-			)}
+		patient.linkStatus === 'Pending' ? (
+			<View style={[styles.actions, {borderTopColor: borderColor + '33'}]}>
+				{renderActionButton(
+					'checkmark.circle.fill',
+					ACTION_LABELS.APROVAR,
+					COLOR_VALUES.SUCCESS,
+					() => handleApproveRequest(patient.id, patient.name)
+				)}
+				<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
+				{renderActionButton(
+					'xmark.circle.fill',
+					ACTION_LABELS.REPROVAR,
+					COLOR_VALUES.DANGER,
+					() => handleRejectRequest(patient.id, patient.name)
+				)}
+			</View>
+		) : (
+			<View style={[styles.actions, {borderTopColor: borderColor + '33'}]}>
+				{renderActionButton(
+					'doc.text.fill',
+					ACTION_LABELS.REGISTROS,
+					tintColor,
+					() =>
+						router.push({
+							pathname: '/(psychologist)/patient/[id]',
+							params: {id: patient.id, name: patient.name},
+						})
+				)}
 
-			<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
+				<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
 
-			{renderActionButton(
-				'arrow.2.squarepath',
-				ACTION_LABELS.TRANSFERIR,
-				mutedColor,
-				() => openTransferModal(patient.id)
-			)}
+				{renderActionButton(
+					'arrow.2.squarepath',
+					ACTION_LABELS.TRANSFERIR,
+					mutedColor,
+					() => openTransferModal(patient.id)
+				)}
 
-			<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
+				<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
 
-			{renderActionButton(
-				'person.slash.fill',
-				ACTION_LABELS.DESVINCULAR,
-				COLOR_VALUES.DANGER,
-				() => handleUnlink(patient.id, patient.name)
-			)}
-		</View>
+				{renderActionButton(
+					'person.slash.fill',
+					ACTION_LABELS.DESVINCULAR,
+					COLOR_VALUES.DANGER,
+					() => handleUnlink(patient.id, patient.name)
+				)}
+			</View>
+		)
 	);
 
 	const renderPatientCard = (item: Patient, index: number) => (
@@ -199,17 +272,27 @@ export default function PatientsScreen() {
 			<View
 				style={[
 					styles.card,
-					{
-						backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-						borderColor: borderColor,
-					},
-				]}
+						{
+							backgroundColor: item.linkStatus === 'Pending'
+								? COLOR_VALUES.WARNING + '12'
+								: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+							borderColor: item.linkStatus === 'Pending' ? COLOR_VALUES.WARNING : borderColor,
+						},
+					]}
 			>
+				{item.linkStatus === 'Pending' && (
+					<View style={[styles.pendingHeader, {backgroundColor: COLOR_VALUES.WARNING + '22'}]}>
+						<ThemedText style={[styles.pendingHeaderText, {color: COLOR_VALUES.WARNING}]}>
+							{MESSAGES.PENDING_BADGE}
+						</ThemedText>
+					</View>
+				)}
+
 				<View style={styles.cardContent}>
 					<View style={{marginRight: AVATAR_MARGIN_RIGHT}}>
 						<Avatar uri={item.profilePictureUrl} size={AVATAR_SIZE} editable={false} name={item.name}/>
 					</View>
-					<ThemedText numberOfLines={1} style={styles.name}>
+					<ThemedText numberOfLines={2} style={styles.name}>
 						{item.name}
 					</ThemedText>
 				</View>
@@ -305,6 +388,18 @@ const styles = StyleSheet.create({
 		fontSize: 18,
 		fontWeight: '700',
 		flex: 1,
+	},
+	pendingHeader: {
+		paddingHorizontal: 20,
+		paddingVertical: 8,
+		borderBottomWidth: 1,
+		borderBottomColor: COLOR_VALUES.WARNING + '55',
+	},
+	pendingHeaderText: {
+		fontSize: 10,
+		fontWeight: '700',
+		letterSpacing: 0.6,
+		textTransform: 'uppercase',
 	},
 	actions: {
 		flexDirection: 'row',

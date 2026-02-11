@@ -37,44 +37,68 @@ public class PsychologistController(ApplicationDbContext context) : ControllerBa
     public async Task<ActionResult<IEnumerable<object>>> GetMyPatients()
     {
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var psychologist = await context.Psychologists
-            .Include(p => p.Patients)
-            .ThenInclude(pat => pat.User)
-            .FirstOrDefaultAsync(p => p.UserId == userId);
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
 
         if (psychologist == null) return NotFound("Psychologist profile not found.");
 
-        var result = psychologist.Patients.Select(p => new
-        {
-            p.Id,
-            Name = p.User?.Name ?? string.Empty,
-            ProfilePictureUrl = p.User?.ProfilePictureUrl
-        });
+        var patients = await context.Patients
+            .Include(p => p.User)
+            .Where(p => p.PsychologistId == psychologist.Id || p.PendingPsychologistId == psychologist.Id)
+            .ToListAsync();
+
+        var result = patients
+            .Select(p => new
+            {
+                p.Id,
+                Name = p.User?.Name ?? string.Empty,
+                ProfilePictureUrl = p.User?.ProfilePictureUrl,
+                LinkStatus = p.PendingPsychologistId == psychologist.Id ? "Pending" : "Linked"
+            })
+            .OrderByDescending(p => p.LinkStatus == "Pending")
+            .ThenBy(p => p.Name);
 
         return Ok(result);
     }
 
-
-    [HttpGet("search")]
-    [AllowAnonymous]
-    public async Task<ActionResult<IEnumerable<object>>> SearchPsychologists([FromQuery] string? name,
-        [FromQuery] string? crp)
+    [HttpPut("patient/{patientId}/approve-link")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<IActionResult> ApprovePatientLinkRequest(Guid patientId)
     {
-        var query = context.Psychologists.Include(p => p.User).AsQueryable();
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (psychologist == null) return NotFound("Psychologist profile not found.");
 
-        if (!string.IsNullOrEmpty(name)) query = query.Where(p => p.User != null && p.User.Name.Contains(name));
+        var patient = await context.Patients.FindAsync(patientId);
+        if (patient == null) return NotFound("Patient not found.");
 
-        if (!string.IsNullOrEmpty(crp)) query = query.Where(p => p.CRP.Contains(crp));
+        if (patient.PendingPsychologistId != psychologist.Id)
+            return BadRequest("This patient does not have a pending request for you.");
 
-        var result = await query.Select(p => new
-        {
-            p.Id,
-            Name = p.User != null ? p.User.Name : string.Empty,
-            p.CRP,
-            Email = p.User != null ? p.User.Username : string.Empty
-        }).ToListAsync();
+        patient.PsychologistId = psychologist.Id;
+        patient.PendingPsychologistId = null;
+        await context.SaveChangesAsync();
 
-        return Ok(result);
+        return Ok("Patient link approved successfully.");
+    }
+
+    [HttpPut("patient/{patientId}/reject-link")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<IActionResult> RejectPatientLinkRequest(Guid patientId)
+    {
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (psychologist == null) return NotFound("Psychologist profile not found.");
+
+        var patient = await context.Patients.FindAsync(patientId);
+        if (patient == null) return NotFound("Patient not found.");
+
+        if (patient.PendingPsychologistId != psychologist.Id)
+            return BadRequest("This patient does not have a pending request for you.");
+
+        patient.PendingPsychologistId = null;
+        await context.SaveChangesAsync();
+
+        return Ok("Patient link request rejected successfully.");
     }
 
 
@@ -140,4 +164,29 @@ public class PsychologistController(ApplicationDbContext context) : ControllerBa
 
         return Ok("Patient transferred successfully.");
     }
+
+
+    [HttpGet("search")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<object>>> SearchPsychologists([FromQuery] string? name,
+        [FromQuery] string? crp)
+    {
+        var query = context.Psychologists.Include(p => p.User).AsQueryable();
+
+        if (!string.IsNullOrEmpty(name)) query = query.Where(p => p.User != null && p.User.Name.Contains(name));
+
+        if (!string.IsNullOrEmpty(crp)) query = query.Where(p => p.CRP.Contains(crp));
+
+        var result = await query.Select(p => new
+        {
+            p.Id,
+            Name = p.User != null ? p.User.Name : string.Empty,
+            p.CRP,
+            Email = p.User != null ? p.User.Username : string.Empty
+        }).ToListAsync();
+
+        return Ok(result);
+    }
+
+
 }
