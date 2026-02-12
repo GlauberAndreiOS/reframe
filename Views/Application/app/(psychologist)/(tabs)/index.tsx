@@ -72,7 +72,6 @@ const COLOR_VALUES = {
 const ANIMATION_DELAY_MS = 100;
 const ANIMATION_DURATION_MS = 600;
 const AVATAR_SIZE = 56;
-const ICON_SIZE = 48;
 const ACTION_ICON_SIZE = 20;
 const AVATAR_MARGIN_RIGHT = 16;
 const CARD_BORDER_RADIUS = 20;
@@ -101,12 +100,12 @@ export default function PatientsScreen() {
 	const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
 	const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
-	// ============= EFFECTS =============
-	useFocusEffect(
-		useCallback(() => {
-			fetchPatients();
-		}, [])
-	);
+	const openPatientDetails = (patient: Patient) => {
+		router.push({
+			pathname: '/(psychologist)/patient/[id]',
+			params: {id: patient.id, name: patient.name},
+		});
+	};
 
 	// ============= HANDLERS =============
 	const fetchPatients = useCallback(() => {
@@ -122,6 +121,13 @@ export default function PatientsScreen() {
 				setLoading(false);
 			});
 	}, []);
+
+	// ============= EFFECTS =============
+	useFocusEffect(
+		useCallback(() => {
+			fetchPatients();
+		}, [fetchPatients])
+	);
 
 	const handleUnlink = (patientId: string, patientName: string) => {
 		const confirmOptions: ConfirmOptions = {
@@ -239,11 +245,7 @@ export default function PatientsScreen() {
 					'doc.text.fill',
 					ACTION_LABELS.REGISTROS,
 					tintColor,
-					() =>
-						router.push({
-							pathname: '/(psychologist)/patient/[id]',
-							params: {id: patient.id, name: patient.name},
-						})
+					() => openPatientDetails(patient)
 				)}
 
 				<View style={[styles.verticalDivider, {backgroundColor: borderColor}]}/>
@@ -272,13 +274,13 @@ export default function PatientsScreen() {
 			<View
 				style={[
 					styles.card,
-						{
-							backgroundColor: item.linkStatus === 'Pending'
-								? COLOR_VALUES.WARNING + '12'
-								: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
-							borderColor: item.linkStatus === 'Pending' ? COLOR_VALUES.WARNING : borderColor,
-						},
-					]}
+					{
+						backgroundColor: item.linkStatus === 'Pending'
+							? COLOR_VALUES.WARNING + '12'
+							: isDark ? 'rgba(255,255,255,0.05)' : cardColor,
+						borderColor: item.linkStatus === 'Pending' ? COLOR_VALUES.WARNING : borderColor,
+					},
+				]}
 			>
 				{item.linkStatus === 'Pending' && (
 					<View style={[styles.pendingHeader, {backgroundColor: COLOR_VALUES.WARNING + '22'}]}>
@@ -288,14 +290,14 @@ export default function PatientsScreen() {
 					</View>
 				)}
 
-				<View style={styles.cardContent}>
+				<TouchableOpacity style={styles.cardContent} onPress={() => openPatientDetails(item)} activeOpacity={0.8}>
 					<View style={{marginRight: AVATAR_MARGIN_RIGHT}}>
 						<Avatar uri={item.profilePictureUrl} size={AVATAR_SIZE} editable={false} name={item.name}/>
 					</View>
-					<ThemedText numberOfLines={2} style={styles.name}>
+					<ThemedText numberOfLines={3} style={styles.name}>
 						{item.name}
 					</ThemedText>
-				</View>
+				</TouchableOpacity>
 
 				{renderPatientActions(item)}
 			</View>

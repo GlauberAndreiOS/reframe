@@ -1,5 +1,5 @@
 import React, {useEffect} from 'react';
-import {ViewProps} from 'react-native';
+import {Platform, View, ViewProps} from 'react-native';
 import Animated, {Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming} from 'react-native-reanimated';
 
 interface AnimatedEntryProps extends ViewProps {
@@ -8,6 +8,35 @@ interface AnimatedEntryProps extends ViewProps {
 }
 
 export function AnimatedEntry({
+	children,
+	style,
+	delay = 0,
+	duration = 800,
+	...props
+}: AnimatedEntryProps) {
+	// Fallback defensivo: em alguns devices Android, a combinação de animação
+	// + telas com modais pode causar crash nativo em draw/display list.
+	if (Platform.OS === 'android') {
+		return (
+			<View style={style} {...props}>
+				{children}
+			</View>
+		);
+	}
+
+	return (
+		<AnimatedEntryWithReanimated
+			delay={delay}
+			duration={duration}
+			style={style}
+			{...props}
+		>
+			{children}
+		</AnimatedEntryWithReanimated>
+	);
+}
+
+function AnimatedEntryWithReanimated({
 	children,
 	style,
 	delay = 0,

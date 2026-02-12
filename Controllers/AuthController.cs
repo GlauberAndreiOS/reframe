@@ -17,6 +17,17 @@ namespace reframe.Controllers;
 public class AuthController(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService)
     : ControllerBase
 {
+    private static DateTime? NormalizeToUtc(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+        return value.Value.Kind switch
+        {
+            DateTimeKind.Utc => value.Value,
+            DateTimeKind.Local => value.Value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+        };
+    }
+
     private static bool IsValidEmail(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
@@ -34,6 +45,24 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
         }
     }
 
+    private static bool IsValidCpf(string? cpf)
+    {
+        if (string.IsNullOrWhiteSpace(cpf))
+            return true;
+
+        var digits = new string(cpf.Where(char.IsDigit).ToArray());
+        return digits.Length == 11;
+    }
+
+    private static bool IsValidZipCode(string? zipCode)
+    {
+        if (string.IsNullOrWhiteSpace(zipCode))
+            return true;
+
+        var digits = new string(zipCode.Where(char.IsDigit).ToArray());
+        return digits.Length == 8;
+    }
+
     [HttpGet("check-username/{username}")]
     public async Task<IActionResult> CheckUsername(string username)
     {
@@ -49,6 +78,11 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
     public async Task<IActionResult> Register(UserDto request)
     {
         if (!IsValidEmail(request.Username)) return BadRequest("Username must be a valid email.");
+        if (!IsValidCpf(request.Cpf)) return BadRequest("CPF must contain 11 digits.");
+        if (!IsValidZipCode(request.ZipCode)) return BadRequest("ZipCode must contain 8 digits.");
+        if (request.UserType == UserType.Psychologist && request.SessionDurationMinutes.HasValue &&
+            request.SessionDurationMinutes.Value <= 0)
+            return BadRequest("Session duration must be greater than zero.");
 
         if (await context.Users.AnyAsync(u => u.Username == request.Username))
             return BadRequest("User already exists.");
@@ -58,7 +92,19 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
             Username = request.Username,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             UserType = request.UserType,
-            Name = request.Name ?? ""
+            Name = request.Name ?? "",
+            BirthDate = NormalizeToUtc(request.BirthDate),
+            Street = request.Street,
+            AddressNumber = request.AddressNumber,
+            AddressComplement = request.AddressComplement,
+            Neighborhood = request.Neighborhood,
+            City = request.City,
+            State = request.State,
+            ZipCode = string.IsNullOrWhiteSpace(request.ZipCode)
+                ? null
+                : new string(request.ZipCode.Where(char.IsDigit).ToArray()),
+            Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : new string(request.Cpf.Where(char.IsDigit).ToArray()),
+            BiologicalSex = request.BiologicalSex
         };
 
         context.Users.Add(user);
@@ -78,7 +124,11 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
             var psychologist = new Psychologist
             {
                 CRP = fullCrp,
-                UserId = user.Id
+                UserId = user.Id,
+                SessionDurationMinutes = request.SessionDurationMinutes,
+                BusinessPhone = request.BusinessPhone,
+                Specialty = request.Specialty,
+                PresentationText = request.PresentationText
             };
             context.Psychologists.Add(psychologist);
         }
@@ -117,7 +167,7 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
         if (user == null) return Ok("If the email exists, you will receive instructions.");
 
         user.ResetToken = CreateRandomToken();
-        user.ResetTokenExpires = DateTime.Now.AddDays(1);
+        user.ResetTokenExpires = DateTime.UtcNow.AddDays(1);
         await context.SaveChangesAsync();
 
         try
@@ -137,7 +187,7 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
     public async Task<IActionResult> ResetPassword(ResetPasswordDto request)
     {
         var user = await context.Users.FirstOrDefaultAsync(u => u.ResetToken == request.Token);
-        if (user == null || user.ResetTokenExpires < DateTime.Now) return BadRequest("Invalid Token.");
+        if (user == null || user.ResetTokenExpires < DateTime.UtcNow) return BadRequest("Invalid Token.");
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         user.ResetToken = null;
@@ -167,7 +217,7 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
 
         var token = new JwtSecurityToken(
             claims: claims,
-            expires: DateTime.Now.AddDays(1),
+            expires: DateTime.UtcNow.AddDays(1),
             signingCredentials: creds
         );
 

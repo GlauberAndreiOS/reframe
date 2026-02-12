@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using reframe.Data;
@@ -13,9 +14,11 @@ using reframe.Models;
 namespace reframe.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260211192512_AddUserProfileAndRoleSpecificFields")]
+    partial class AddUserProfileAndRoleSpecificFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -120,7 +123,10 @@ namespace reframe.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<List<PatientDocument>>("Documents")
+                    b.Property<string>("ExternalRecord")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ObstetricData")
                         .HasColumnType("jsonb");
 
                     b.Property<Guid?>("PendingPsychologistId")
@@ -285,11 +291,8 @@ namespace reframe.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("AddressComplement")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AddressNumber")
-                        .HasColumnType("text");
+                    b.Property<string>("Address")
+                        .HasColumnType("jsonb");
 
                     b.Property<int?>("BiologicalSex")
                         .HasColumnType("integer");
@@ -297,17 +300,11 @@ namespace reframe.Migrations
                     b.Property<DateTime?>("BirthDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("City")
-                        .HasColumnType("text");
-
                     b.Property<string>("Cpf")
                         .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Neighborhood")
                         .HasColumnType("text");
 
                     b.Property<string>("PasswordHash")
@@ -323,20 +320,11 @@ namespace reframe.Migrations
                     b.Property<DateTime?>("ResetTokenExpires")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("State")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Street")
-                        .HasColumnType("text");
-
                     b.Property<int>("UserType")
                         .HasColumnType("integer");
 
                     b.Property<string>("Username")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ZipCode")
                         .HasColumnType("text");
 
                     b.HasKey("Id");

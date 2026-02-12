@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using reframe.Data;
+using reframe.Models;
 
 namespace reframe.Controllers;
 
@@ -10,6 +11,35 @@ namespace reframe.Controllers;
 [Authorize]
 public class PsychologistController(ApplicationDbContext context) : ControllerBase
 {
+    private static DateTime? NormalizeToUtc(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+        return value.Value.Kind switch
+        {
+            DateTimeKind.Utc => value.Value,
+            DateTimeKind.Local => value.Value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+        };
+    }
+
+    private static bool IsValidCpf(string? cpf)
+    {
+        if (string.IsNullOrWhiteSpace(cpf))
+            return true;
+
+        var digits = new string(cpf.Where(char.IsDigit).ToArray());
+        return digits.Length == 11;
+    }
+
+    private static bool IsValidZipCode(string? zipCode)
+    {
+        if (string.IsNullOrWhiteSpace(zipCode))
+            return true;
+
+        var digits = new string(zipCode.Where(char.IsDigit).ToArray());
+        return digits.Length == 8;
+    }
+
     [HttpGet("profile")]
     [Authorize(Roles = "Psychologist")]
     public async Task<ActionResult<object>> GetProfile()
@@ -27,8 +57,59 @@ public class PsychologistController(ApplicationDbContext context) : ControllerBa
             Name = psychologist.User?.Name ?? string.Empty,
             psychologist.CRP,
             Email = psychologist.User?.Username ?? string.Empty,
-            ProfilePictureUrl = psychologist.User?.ProfilePictureUrl
+            ProfilePictureUrl = psychologist.User?.ProfilePictureUrl,
+            psychologist.User?.BirthDate,
+            psychologist.User?.Street,
+            psychologist.User?.AddressNumber,
+            psychologist.User?.AddressComplement,
+            psychologist.User?.Neighborhood,
+            psychologist.User?.City,
+            psychologist.User?.State,
+            psychologist.User?.ZipCode,
+            psychologist.User?.Cpf,
+            psychologist.User?.BiologicalSex,
+            psychologist.SessionDurationMinutes,
+            psychologist.BusinessPhone,
+            psychologist.Specialty,
+            psychologist.PresentationText
         });
+    }
+
+    [HttpPut("profile")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdatePsychologistProfileDto dto)
+    {
+        if (!IsValidCpf(dto.Cpf)) return BadRequest("CPF must contain 11 digits.");
+        if (!IsValidZipCode(dto.ZipCode)) return BadRequest("ZipCode must contain 8 digits.");
+        if (dto.SessionDurationMinutes.HasValue && dto.SessionDurationMinutes.Value <= 0)
+            return BadRequest("Session duration must be greater than zero.");
+
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
+        var psychologist = await context.Psychologists
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (psychologist == null || psychologist.User == null) return NotFound("Psychologist profile not found.");
+
+        psychologist.User.Name = dto.Name ?? psychologist.User.Name;
+        psychologist.User.BirthDate = NormalizeToUtc(dto.BirthDate);
+        psychologist.User.Street = dto.Street;
+        psychologist.User.AddressNumber = dto.AddressNumber;
+        psychologist.User.AddressComplement = dto.AddressComplement;
+        psychologist.User.Neighborhood = dto.Neighborhood;
+        psychologist.User.City = dto.City;
+        psychologist.User.State = dto.State;
+        psychologist.User.ZipCode = string.IsNullOrWhiteSpace(dto.ZipCode) ? null : new string(dto.ZipCode.Where(char.IsDigit).ToArray());
+        psychologist.User.Cpf = string.IsNullOrWhiteSpace(dto.Cpf) ? null : new string(dto.Cpf.Where(char.IsDigit).ToArray());
+        psychologist.User.BiologicalSex = dto.BiologicalSex;
+
+        psychologist.SessionDurationMinutes = dto.SessionDurationMinutes;
+        psychologist.BusinessPhone = dto.BusinessPhone;
+        psychologist.Specialty = dto.Specialty;
+        psychologist.PresentationText = dto.PresentationText;
+
+        await context.SaveChangesAsync();
+        return Ok("Profile updated successfully.");
     }
 
 
@@ -58,6 +139,47 @@ public class PsychologistController(ApplicationDbContext context) : ControllerBa
             .ThenBy(p => p.Name);
 
         return Ok(result);
+    }
+
+    [HttpGet("patient/{patientId}/profile")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<ActionResult<object>> GetPatientProfile(Guid patientId)
+    {
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (psychologist == null) return NotFound("Psychologist profile not found.");
+
+        var patient = await context.Patients
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.Id == patientId);
+
+        if (patient == null) return NotFound("Patient not found.");
+
+        var hasAccess = patient.PsychologistId == psychologist.Id || patient.PendingPsychologistId == psychologist.Id;
+        if (!hasAccess) return Forbid("You do not have access to this patient's profile.");
+
+        var documents = patient.Documents?.ToList() ?? [];
+
+        return Ok(new
+        {
+            patient.Id,
+            Name = patient.User?.Name ?? string.Empty,
+            ProfilePictureUrl = patient.User?.ProfilePictureUrl,
+            patient.User?.BirthDate,
+            patient.User?.Street,
+            patient.User?.AddressNumber,
+            patient.User?.AddressComplement,
+            patient.User?.Neighborhood,
+            patient.User?.City,
+            patient.User?.State,
+            patient.User?.ZipCode,
+            patient.User?.Cpf,
+            patient.User?.BiologicalSex,
+            Documents = documents
+                .OrderByDescending(d => d.UploadedAtUtc)
+                .ToList()
+        });
     }
 
     [HttpPut("patient/{patientId}/approve-link")]

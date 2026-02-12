@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using reframe.Data;
@@ -13,9 +14,11 @@ using reframe.Models;
 namespace reframe.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260212013128_AddPatientDocumentsJson")]
+    partial class AddPatientDocumentsJson
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -122,6 +125,18 @@ namespace reframe.Migrations
 
                     b.Property<List<PatientDocument>>("Documents")
                         .HasColumnType("jsonb");
+
+                    b.Property<string>("ExternalRecord")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ExternalRecordPdfUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ObstetricData")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ObstetricDataFileUrl")
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("PendingPsychologistId")
                         .HasColumnType("uuid");

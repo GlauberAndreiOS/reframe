@@ -36,6 +36,8 @@ const HEADERS = {
 	CONTEXT_APP: 'X-Context-Application',
 } as const;
 
+const API_SUFFIX_REGEX = /\/api\/?$/i;
+
 // ============= API INSTANCE =============
 const api: AxiosInstance = axios.create({
 	baseURL: API_CONFIG.baseURL,
@@ -43,6 +45,20 @@ const api: AxiosInstance = axios.create({
 		[HEADERS.CONTENT_TYPE]: HEADERS.CONTENT_JSON,
 	},
 });
+
+export const getFileBaseUrl = (): string => {
+	const baseUrl = api.defaults.baseURL || API_CONFIG.baseURL;
+	return baseUrl.replace(API_SUFFIX_REGEX, '');
+};
+
+export const buildFileUrl = (path: string): string => {
+	if (path.startsWith('http://') || path.startsWith('https://')) {
+		return path;
+	}
+
+	const baseUrl = getFileBaseUrl();
+	return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+};
 
 // ============= STATE =============
 let onUnauthorized: UnauthorizedHandler | null = null;

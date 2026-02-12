@@ -76,6 +76,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .Property(qt => qt.Questions)
             .HasColumnType("jsonb");
 
+        modelBuilder.Entity<Patient>()
+            .Property(p => p.Documents)
+            .HasColumnType("jsonb");
+
         modelBuilder.Entity<QuestionnaireResponse>()
             .HasOne(qr => qr.Questionnaire)
             .WithMany()

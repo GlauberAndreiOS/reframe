@@ -4,12 +4,14 @@ import {
 	FlatList,
 	KeyboardAvoidingView,
 	Platform,
+	ScrollView,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
-	View
+	View,
 } from 'react-native';
 import {useRouter} from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import {api} from '@/services';
 import {
 	ThemedView,
@@ -21,13 +23,13 @@ import {
 import type {HelperTextType} from '@/components';
 import {useThemeColor, useColorScheme} from '@/hooks';
 import {useToast} from '@/context';
+import {maskCPF, maskDate, unmaskCPF} from '@/utils';
 
-// ============= TYPES & INTERFACES =============
 type UserType = 'patient' | 'psychologist' | null;
-type RegistrationStep = 0 | 1 | 2;
+type RegistrationStep = 0 | 1 | 2 | 3 | 4 | 5;
 
 interface Psychologist {
-	id: number;
+	id: string;
 	name: string;
 	crp: string;
 	email: string;
@@ -41,23 +43,40 @@ interface HelperMessage {
 
 interface RegistrationFormState {
 	username: string;
-	name: string;
 	password: string;
 	confirmPassword: string;
+	name: string;
+	birthDate: string;
+	cpf: string;
+	biologicalSex: string;
+	street: string;
+	addressNumber: string;
+	addressComplement: string;
+	neighborhood: string;
+	city: string;
+	state: string;
+	zipCode: string;
+	obstetricData: string;
 	crp: string;
 	uf: string;
+	sessionDurationMinutes: string;
+	businessPhone: string;
+	specialty: string;
+	presentationText: string;
 }
 
 interface PsychologistFilterState {
 	searchQuery: string;
-	selectedPsychologistId: number | null;
+	selectedPsychologistId: string | null;
 }
 
-// ============= CONSTANTS =============
 const REGISTRATION_STEPS = {
 	AUTH: 0,
-	USER_TYPE: 1,
-	DETAILS: 2,
+	COMMON_DATA: 1,
+	ADDRESS: 2,
+	USER_TYPE: 3,
+	RECORD_IMPORT: 4,
+	FINAL: 5,
 } as const;
 
 const USER_TYPES = {
@@ -65,8 +84,22 @@ const USER_TYPES = {
 	PSYCHOLOGIST: 'psychologist' as const,
 } as const;
 
+const BIOLOGICAL_SEX = {
+	FEMALE: '0',
+	MALE: '1',
+	INTERSEX: '2',
+	NOT_INFORMED: '3',
+} as const;
+
+const BIOLOGICAL_SEX_OPTIONS = [
+	{value: BIOLOGICAL_SEX.FEMALE, label: 'Mulher'},
+	{value: BIOLOGICAL_SEX.MALE, label: 'Homem'},
+	{value: BIOLOGICAL_SEX.INTERSEX, label: 'Intersexo'},
+	{value: BIOLOGICAL_SEX.NOT_INFORMED, label: 'Prefiro não informar'},
+] as const;
+
 const VALIDATION_MESSAGES = {
-	FILL_ALL_FIELDS: 'Preencha todos os campos.',
+	FILL_ALL_FIELDS: 'Preencha os campos obrigatórios.',
 	INVALID_EMAIL: 'Insira um e-mail válido.',
 	EMAIL_TAKEN: 'E-mail já cadastrado.',
 	EMAIL_AVAILABLE: 'E-mail disponível!',
@@ -89,10 +122,7 @@ const UF_MAX_LENGTH = 2;
 const REDIRECT_DELAY_MS = 1500;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// ============= UTILITY FUNCTIONS =============
-const validateEmail = (email: string): boolean => {
-	return EMAIL_REGEX.test(email);
-};
+const validateEmail = (email: string): boolean => EMAIL_REGEX.test(email);
 
 const formatCrpNumber = (text: string): string => {
 	const cleanedDigits = text.replace(/\D/g, '');
@@ -104,35 +134,58 @@ const formatCrpNumber = (text: string): string => {
 	return cleanedDigits;
 };
 
-const buildPsychologistRegistrationPayload = (
-	username: string,
-	password: string,
-	name: string,
-	crp: string,
-	uf: string
-) => ({
-	username,
-	password,
-	name,
-	userType: 0,
-	crpNumber: crp.split(CRP_FORMAT.SEPARATOR)[0],
-	crpUf: uf,
+const maskZipCode = (value: string): string => {
+	const digits = value.replace(/\D/g, '').slice(0, 8);
+	if (digits.length <= 5) return digits;
+	return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+};
+
+const toIsoDate = (maskedDate: string): string | null => {
+	if (!maskedDate) return null;
+	const parts = maskedDate.split('/');
+	if (parts.length !== 3) return null;
+	const [day, month, year] = parts;
+	if (day.length !== 2 || month.length !== 2 || year.length !== 4) return null;
+	return `${year}-${month}-${day}`;
+};
+
+const buildCommonPayload = (form: RegistrationFormState) => ({
+	name: form.name || null,
+	birthDate: toIsoDate(form.birthDate),
+	cpf: unmaskCPF(form.cpf) || null,
+	biologicalSex: form.biologicalSex ? Number(form.biologicalSex) : null,
+	street: form.street || null,
+	addressNumber: form.addressNumber || null,
+	addressComplement: form.addressComplement || null,
+	neighborhood: form.neighborhood || null,
+	city: form.city || null,
+	state: form.state || null,
+	zipCode: form.zipCode || null,
 });
 
-const buildPatientRegistrationPayload = (
-	username: string,
-	password: string,
-	name: string,
-	psychologistId: number | null
-) => ({
-	username,
-	password,
-	name,
+const buildPsychologistRegistrationPayload = (form: RegistrationFormState) => ({
+	username: form.username,
+	password: form.password,
+	userType: 0,
+	crpNumber: form.crp.split(CRP_FORMAT.SEPARATOR)[0],
+	crpUf: form.uf,
+	...buildCommonPayload(form),
+	sessionDurationMinutes: form.sessionDurationMinutes ? Number(form.sessionDurationMinutes) : null,
+	businessPhone: form.businessPhone || null,
+	specialty: form.specialty || null,
+	presentationText: form.presentationText || null,
+});
+
+const buildPatientRegistrationPayload = (form: RegistrationFormState, psychologistId: string | null) => ({
+	username: form.username,
+	password: form.password,
 	userType: 1,
 	psychologistId,
+	...buildCommonPayload(form),
+	externalRecord: null,
+	obstetricData: null,
 });
 
-// ============= ERROR HANDLING =============
 const handleRegistrationError = (error: any): string => {
 	if (error.response?.data) {
 		return typeof error.response.data === 'string'
@@ -151,37 +204,51 @@ const handleApiError = (error: any): string => {
 	return VALIDATION_MESSAGES.PSYCHOLOGISTS_ERROR;
 };
 
-// ============= MAIN COMPONENT =============
 export default function Register() {
 	const router = useRouter();
 	const {showToast} = useToast();
 	const colorScheme = useColorScheme() ?? 'light';
 	const isDark = colorScheme === 'dark';
 
-	// ============= THEME COLORS =============
 	const tintColor = useThemeColor({}, 'tint');
 	const borderColor = useThemeColor({}, 'border');
 	const mutedColor = useThemeColor({}, 'muted');
 	const textColor = useThemeColor({}, 'text');
 
-	// ============= FORM STATE =============
-	const [currentStep, setCurrentStep] = useState<RegistrationStep>(REGISTRATION_STEPS.AUTH as RegistrationStep);
+	const [currentStep, setCurrentStep] = useState<RegistrationStep>(REGISTRATION_STEPS.AUTH);
 	const [userType, setUserType] = useState<UserType>(null);
+	const [selectedExternalRecordFile, setSelectedExternalRecordFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+	const [selectedObstetricFile, setSelectedObstetricFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
 
 	const [formData, setFormData] = useState<RegistrationFormState>({
 		username: '',
-		name: '',
 		password: '',
 		confirmPassword: '',
+		name: '',
+		birthDate: '',
+		cpf: '',
+		biologicalSex: '',
+		street: '',
+		addressNumber: '',
+		addressComplement: '',
+		neighborhood: '',
+		city: '',
+		state: '',
+		zipCode: '',
+		obstetricData: '',
 		crp: '',
 		uf: '',
+		sessionDurationMinutes: '',
+		businessPhone: '',
+		specialty: '',
+		presentationText: '',
 	});
 
 	const [usernameHelper, setUsernameHelper] = useState<HelperMessage | null>(null);
 	const [passwordHelper, setPasswordHelper] = useState<HelperMessage | null>(null);
 	const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+	const [isLoadingZipCode, setIsLoadingZipCode] = useState(false);
 
-	// ============= PSYCHOLOGIST LIST STATE =============
 	const [psychologists, setPsychologists] = useState<Psychologist[]>([]);
 	const [isLoadingPsychologists, setIsLoadingPsychologists] = useState(false);
 	const [filterState, setFilterState] = useState<PsychologistFilterState>({
@@ -189,7 +256,6 @@ export default function Register() {
 		selectedPsychologistId: null,
 	});
 
-	// ============= FORM DATA HANDLERS =============
 	const updateFormData = (updates: Partial<RegistrationFormState>) => {
 		setFormData(prev => ({...prev, ...updates}));
 	};
@@ -198,7 +264,6 @@ export default function Register() {
 		setFilterState(prev => ({...prev, ...updates}));
 	};
 
-	// ============= USERNAME VALIDATION =============
 	const checkUsername = useCallback(() => {
 		if (!formData.username) {
 			setUsernameHelper(null);
@@ -230,16 +295,6 @@ export default function Register() {
 			});
 	}, [formData.username]);
 
-	// ============= PASSWORD VALIDATION =============
-	useEffect(() => {
-		if (formData.confirmPassword && formData.password !== formData.confirmPassword) {
-			setPasswordHelper({text: VALIDATION_MESSAGES.PASSWORDS_DONT_MATCH, type: 'error'});
-		} else {
-			setPasswordHelper(null);
-		}
-	}, [formData.password, formData.confirmPassword]);
-
-	// ============= PSYCHOLOGISTS DATA FETCHING =============
 	const fetchPsychologists = useCallback(() => {
 		setIsLoadingPsychologists(true);
 
@@ -250,8 +305,7 @@ export default function Register() {
 			})
 			.catch(error => {
 				console.error('Failed to fetch psychologists:', error);
-				const errorMessage = handleApiError(error);
-				showToast(errorMessage, 'error');
+				showToast(handleApiError(error), 'error');
 			})
 			.finally(() => {
 				setIsLoadingPsychologists(false);
@@ -259,27 +313,64 @@ export default function Register() {
 	}, [showToast]);
 
 	useEffect(() => {
-		if (currentStep === REGISTRATION_STEPS.DETAILS && userType === USER_TYPES.PATIENT) {
+		if (currentStep === REGISTRATION_STEPS.FINAL && userType === USER_TYPES.PATIENT) {
 			fetchPsychologists();
 		}
 	}, [currentStep, userType, fetchPsychologists]);
 
-	// ============= STEP VALIDATION LOGIC =============
-	const validateAuthStep = (): boolean => {
-		const {username, name, password, confirmPassword} = formData;
+	const handleZipCodeLookup = useCallback(() => {
+		const digits = formData.zipCode.replace(/\D/g, '');
+		if (digits.length !== 8) return;
 
-		if (!username || !password || !confirmPassword || !name) {
+		setIsLoadingZipCode(true);
+		api.get(`/Profile/zip-code/${digits}`)
+			.then((response) => {
+				const data = response.data;
+				updateFormData({
+					zipCode: maskZipCode(data.cep || digits),
+					street: data.logradouro || '',
+					addressComplement: data.complemento || formData.addressComplement,
+					neighborhood: data.bairro || '',
+					city: data.cidade || '',
+					state: data.estado || '',
+				});
+				showToast('Endereço preenchido pelo CEP.', 'success');
+			})
+			.catch((error) => {
+				console.error('CEP lookup failed:', error);
+			})
+			.finally(() => {
+				setIsLoadingZipCode(false);
+			});
+	}, [formData.zipCode, formData.addressComplement, showToast]);
+
+	useEffect(() => {
+		if (!formData.confirmPassword) {
+			setPasswordHelper(null);
+			return;
+		}
+
+		if (formData.password !== formData.confirmPassword) {
+			setPasswordHelper({text: VALIDATION_MESSAGES.PASSWORDS_DONT_MATCH, type: 'error'});
+			return;
+		}
+
+		setPasswordHelper(null);
+	}, [formData.password, formData.confirmPassword]);
+
+	const validateAuthStep = (): boolean => {
+		if (!formData.username || !formData.password || !formData.confirmPassword) {
 			showToast(VALIDATION_MESSAGES.FILL_ALL_FIELDS, 'error');
+			return false;
+		}
+
+		if (formData.password !== formData.confirmPassword) {
+			showToast(VALIDATION_MESSAGES.PASSWORDS_DONT_MATCH, 'error');
 			return false;
 		}
 
 		if (usernameHelper?.type === 'error') {
 			showToast(VALIDATION_MESSAGES.INVALID_EMAIL, 'error');
-			return false;
-		}
-
-		if (password !== confirmPassword) {
-			showToast(VALIDATION_MESSAGES.PASSWORDS_DONT_MATCH, 'error');
 			return false;
 		}
 
@@ -294,21 +385,33 @@ export default function Register() {
 		return true;
 	};
 
-	const validateProfessionalDetails = (): boolean => {
-		const {crp, uf} = formData;
-		if (!crp || !uf) {
+	const validatePsychologistFinalStep = useCallback((): boolean => {
+		if (!formData.crp || !formData.uf) {
 			showToast(VALIDATION_MESSAGES.FILL_PROFESSIONAL_DATA, 'error');
 			return false;
 		}
 		return true;
-	};
+	}, [formData.crp, formData.uf, showToast]);
 
-	// ============= NAVIGATION =============
 	const handleNextStep = () => {
-		if (currentStep === REGISTRATION_STEPS.AUTH && validateAuthStep()) {
-			setCurrentStep(REGISTRATION_STEPS.USER_TYPE as RegistrationStep);
-		} else if (currentStep === REGISTRATION_STEPS.USER_TYPE && validateUserTypeStep()) {
-			setCurrentStep(REGISTRATION_STEPS.DETAILS as RegistrationStep);
+		switch (currentStep) {
+		case REGISTRATION_STEPS.AUTH:
+			if (validateAuthStep()) setCurrentStep(REGISTRATION_STEPS.COMMON_DATA);
+			break;
+		case REGISTRATION_STEPS.COMMON_DATA:
+			setCurrentStep(REGISTRATION_STEPS.ADDRESS);
+			break;
+		case REGISTRATION_STEPS.ADDRESS:
+			setCurrentStep(REGISTRATION_STEPS.USER_TYPE);
+			break;
+		case REGISTRATION_STEPS.USER_TYPE:
+			if (validateUserTypeStep()) setCurrentStep(REGISTRATION_STEPS.RECORD_IMPORT);
+			break;
+		case REGISTRATION_STEPS.RECORD_IMPORT:
+			setCurrentStep(REGISTRATION_STEPS.FINAL);
+			break;
+		default:
+			break;
 		}
 	};
 
@@ -319,67 +422,120 @@ export default function Register() {
 	};
 
 	const handleBackButton = () => {
-		if (currentStep === 0) {
+		if (currentStep === REGISTRATION_STEPS.AUTH) {
 			router.back();
-		} else {
-			handlePreviousStep();
+			return;
+		}
+		handlePreviousStep();
+	};
+
+	const handleRegister = useCallback(() => {
+		const uploadExternalRecordIfNeeded = async () => {
+			if (userType !== USER_TYPES.PATIENT || !selectedExternalRecordFile) return;
+
+			const loginResponse = await api.post('/Auth/login', {
+				username: formData.username,
+				password: formData.password,
+			});
+
+			const token = loginResponse.data?.token;
+			if (!token) return;
+
+			const form = new FormData();
+			form.append('file', {
+				uri: selectedExternalRecordFile.uri,
+				name: selectedExternalRecordFile.name,
+				type: selectedExternalRecordFile.mimeType || 'application/octet-stream',
+			} as any);
+
+			await api.post('/Patient/external-record/upload', form, {
+				headers: {
+					'Content-Type': 'multipart/form-data',
+					Authorization: `Bearer ${token}`,
+				},
+			});
+
+			if (selectedObstetricFile) {
+				const obstetricForm = new FormData();
+				obstetricForm.append('file', {
+					uri: selectedObstetricFile.uri,
+					name: selectedObstetricFile.name,
+					type: selectedObstetricFile.mimeType || 'application/octet-stream',
+				} as any);
+
+				await api.post('/Patient/obstetric-data/upload', obstetricForm, {
+					headers: {
+						'Content-Type': 'multipart/form-data',
+						Authorization: `Bearer ${token}`,
+					},
+				});
+			}
+		};
+
+		const execute = async () => {
+			if (userType === USER_TYPES.PSYCHOLOGIST && !validatePsychologistFinalStep()) {
+				return;
+			}
+
+			const payload = userType === USER_TYPES.PSYCHOLOGIST
+				? buildPsychologistRegistrationPayload(formData)
+				: buildPatientRegistrationPayload(formData, filterState.selectedPsychologistId);
+
+			await api.post('/Auth/register', payload);
+			await uploadExternalRecordIfNeeded();
+			showToast(VALIDATION_MESSAGES.REGISTRATION_SUCCESS, 'success');
+			setTimeout(() => router.replace('/(auth)/login'), REDIRECT_DELAY_MS);
+		};
+
+		execute().catch(error => {
+			console.error('Registration error:', error);
+			showToast(handleRegistrationError(error), 'error');
+		});
+	}, [formData, filterState.selectedPsychologistId, router, showToast, userType, validatePsychologistFinalStep, selectedExternalRecordFile, selectedObstetricFile]);
+
+	const handlePickExternalRecordFile = async () => {
+		try {
+			const result = await DocumentPicker.getDocumentAsync({
+				type: ['application/pdf', 'text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel'],
+				copyToCacheDirectory: true,
+				multiple: false,
+			});
+
+			if (result.canceled || !result.assets?.length) return;
+			setSelectedExternalRecordFile(result.assets[0]);
+		} catch (error) {
+			console.error('External record pick error:', error);
+			showToast('Não foi possível selecionar o arquivo.', 'error');
 		}
 	};
 
-	// ============= REGISTRATION =============
-	const handleRegister = useCallback(() => {
-		if (userType === USER_TYPES.PSYCHOLOGIST) {
-			if (!validateProfessionalDetails()) return;
-		}
-
-		const payload = userType === USER_TYPES.PSYCHOLOGIST
-			? buildPsychologistRegistrationPayload(
-				formData.username,
-				formData.password,
-				formData.name,
-				formData.crp,
-				formData.uf
-			)
-			: buildPatientRegistrationPayload(
-				formData.username,
-				formData.password,
-				formData.name,
-				filterState.selectedPsychologistId
-			);
-
-		api
-			.post('/Auth/register', payload)
-			.then(() => {
-				showToast(VALIDATION_MESSAGES.REGISTRATION_SUCCESS, 'success');
-				setTimeout(() => router.replace('/(auth)/login'), REDIRECT_DELAY_MS);
-			})
-			.catch(error => {
-				console.error('Registration error:', error);
-				const errorMessage = handleRegistrationError(error);
-				showToast(errorMessage, 'error');
+	const handlePickObstetricFile = async () => {
+		try {
+			const result = await DocumentPicker.getDocumentAsync({
+				type: ['*/*'],
+				copyToCacheDirectory: true,
+				multiple: false,
 			});
-	}, [formData, filterState.selectedPsychologistId, showToast, router, userType]);
 
-	// ============= RENDER COMPONENTS =============
+			if (result.canceled || !result.assets?.length) return;
+			setSelectedObstetricFile(result.assets[0]);
+		} catch (error) {
+			console.error('Obstetric file pick error:', error);
+			showToast('Não foi possível selecionar o arquivo obstétrico.', 'error');
+		}
+	};
+
 	const renderAuthStep = () => {
-		const isNextDisabled = 
-			!(formData.username && formData.password && formData.confirmPassword && formData.name) ||
+		const isNextDisabled =
+			!(formData.username && formData.password && formData.confirmPassword) ||
+			formData.password !== formData.confirmPassword ||
 			usernameHelper?.type === 'error' ||
-			isCheckingUsername ||
-			passwordHelper?.type === 'error';
+			isCheckingUsername;
 
 		return (
 			<View style={styles.formSection}>
-				<Text style={[styles.stepTitle, {color: textColor}]}>Vamos criar uma conta!</Text>
-
+				<Text style={[styles.stepTitle, {color: textColor}]}>Vamos criar uma conta</Text>
 				<View style={styles.inputGroup}>
-					<GlassInput
-						placeholder="Nome Completo"
-						value={formData.name}
-						onChangeText={(text) => updateFormData({name: text})}
-						autoCapitalize="words"
-					/>
-
 					<GlassInput
 						helperText={usernameHelper}
 						placeholder="Email"
@@ -391,11 +547,7 @@ export default function Register() {
 						}}
 						onBlur={checkUsername}
 						autoCapitalize="none"
-						rightAdornment={
-							isCheckingUsername ? (
-								<ActivityIndicator size="small" color={tintColor}/>
-							) : null
-						}
+						rightAdornment={isCheckingUsername ? <ActivityIndicator size="small" color={tintColor}/> : null}
 					/>
 
 					<GlassInput
@@ -432,30 +584,26 @@ export default function Register() {
 					style={[
 						styles.typeButton,
 						{borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'},
-						userType === USER_TYPES.PATIENT && {backgroundColor: tintColor}
+						userType === USER_TYPES.PATIENT && {backgroundColor: tintColor},
 					]}
 					onPress={() => setUserType(USER_TYPES.PATIENT)}
 				>
-					<Text style={[
-						styles.typeButtonText,
-						{color: tintColor},
-						userType === USER_TYPES.PATIENT && styles.typeButtonTextSelected
-					]}>Paciente</Text>
+					<Text style={[styles.typeButtonText, {color: tintColor}, userType === USER_TYPES.PATIENT && styles.typeButtonTextSelected]}>
+						Paciente
+					</Text>
 				</TouchableOpacity>
 
 				<TouchableOpacity
 					style={[
 						styles.typeButton,
 						{borderColor: tintColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'},
-						userType === USER_TYPES.PSYCHOLOGIST && {backgroundColor: tintColor}
+						userType === USER_TYPES.PSYCHOLOGIST && {backgroundColor: tintColor},
 					]}
 					onPress={() => setUserType(USER_TYPES.PSYCHOLOGIST)}
 				>
-					<Text style={[
-						styles.typeButtonText,
-						{color: tintColor},
-						userType === USER_TYPES.PSYCHOLOGIST && styles.typeButtonTextSelected
-					]}>Psicólogo</Text>
+					<Text style={[styles.typeButtonText, {color: tintColor}, userType === USER_TYPES.PSYCHOLOGIST && styles.typeButtonTextSelected]}>
+						Psicólogo
+					</Text>
 				</TouchableOpacity>
 			</View>
 			<TouchableOpacity
@@ -468,33 +616,127 @@ export default function Register() {
 		</View>
 	);
 
-	const renderPsychologistDetails = () => {
-		const isFinishDisabled = !formData.crp || !formData.uf;
+	const renderCommonDataStep = () => (
+		<View style={styles.formSection}>
+			<Text style={[styles.stepTitle, {color: textColor}]}>Dados Pessoais</Text>
+			<View style={styles.inputGroup}>
+				<GlassInput placeholder="Nome completo" value={formData.name} onChangeText={(text) => updateFormData({name: text})} autoCapitalize="words" />
+				<GlassInput
+					placeholder="CPF"
+					value={formData.cpf}
+					onChangeText={(text) => updateFormData({cpf: maskCPF(text)})}
+					keyboardType="numeric"
+					maxLength={14}
+				/>
+				<GlassInput
+					placeholder="Aniversário (DD/MM/AAAA)"
+					value={formData.birthDate}
+					onChangeText={(text) => updateFormData({birthDate: maskDate(text)})}
+					keyboardType="numeric"
+					maxLength={10}
+				/>
+				<View style={styles.radioGroup}>
+					<Text style={[styles.radioGroupTitle, {color: mutedColor}]}>Sexo biológico</Text>
+					{BIOLOGICAL_SEX_OPTIONS.map((option) => {
+						const selected = formData.biologicalSex === option.value;
+						return (
+							<TouchableOpacity
+								key={option.value}
+								style={[
+									styles.radioOption,
+									{
+										borderColor: selected ? tintColor : borderColor,
+										backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
+									},
+								]}
+								onPress={() => {
+									updateFormData({biologicalSex: option.value});
+									if (option.value !== BIOLOGICAL_SEX.FEMALE) {
+										setSelectedObstetricFile(null);
+									}
+								}}
+							>
+								<View style={[styles.radioCircle, {borderColor: selected ? tintColor : mutedColor}]}>
+									{selected && <View style={[styles.radioDot, {backgroundColor: tintColor}]}/>}
+								</View>
+								<Text style={[styles.radioLabel, {color: textColor}]}>{option.label}</Text>
+							</TouchableOpacity>
+						);
+					})}
+				</View>
+			</View>
+			<TouchableOpacity style={[styles.primaryButton, {backgroundColor: tintColor}]} onPress={handleNextStep}>
+				<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
+			</TouchableOpacity>
+		</View>
+	);
+
+	const renderAddressStep = () => (
+		<View style={styles.formSection}>
+			<ScrollView
+				style={styles.addressScroll}
+				contentContainerStyle={styles.inputGroup}
+				showsVerticalScrollIndicator={false}
+				keyboardShouldPersistTaps="handled"
+			>
+				<Text style={[styles.stepTitle, {color: textColor}]}>Endereço</Text>
+				<GlassInput
+					placeholder="CEP"
+					value={formData.zipCode}
+					onChangeText={(text) => updateFormData({zipCode: maskZipCode(text)})}
+					onBlur={handleZipCodeLookup}
+					keyboardType="numeric"
+					maxLength={9}
+					rightAdornment={isLoadingZipCode ? <ActivityIndicator size="small" color={tintColor}/> : null}
+				/>
+				<GlassInput placeholder="Logradouro" value={formData.street} onChangeText={(text) => updateFormData({street: text})} />
+				<GlassInput placeholder="Número" value={formData.addressNumber} onChangeText={(text) => updateFormData({addressNumber: text})} />
+				<GlassInput placeholder="Complemento" value={formData.addressComplement} onChangeText={(text) => updateFormData({addressComplement: text})} />
+				<GlassInput placeholder="Bairro" value={formData.neighborhood} onChangeText={(text) => updateFormData({neighborhood: text})} />
+				<GlassInput placeholder="Cidade" value={formData.city} onChangeText={(text) => updateFormData({city: text})} />
+				<GlassInput placeholder="Estado (UF)" value={formData.state} onChangeText={(text) => updateFormData({state: text.toUpperCase()})} maxLength={2} />
+				<TouchableOpacity style={[styles.primaryButton, {backgroundColor: tintColor}]} onPress={handleNextStep}>
+					<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
+				</TouchableOpacity>
+			</ScrollView>
+		</View>
+	);
+
+	const renderRecordImportStep = () => {
+		const isFemale = formData.biologicalSex === BIOLOGICAL_SEX.FEMALE;
+		const isPatient = userType === USER_TYPES.PATIENT;
+
 		return (
 			<View style={styles.formSection}>
-				<Text style={[styles.stepTitle, {color: textColor}]}>Dados Profissionais</Text>
+				<Text style={[styles.stepTitle, {color: textColor}]}>Dados Complementares</Text>
 				<View style={styles.inputGroup}>
-					<GlassInput
-						placeholder="CRP (ex: 06/12345)"
-						value={formData.crp}
-						onChangeText={(text) => updateFormData({crp: formatCrpNumber(text)})}
-						keyboardType="numeric"
-						maxLength={CRP_FORMAT.MAX_LENGTH}
-					/>
-					<GlassInput
-						placeholder="UF (ex: SP)"
-						value={formData.uf}
-						onChangeText={(text) => updateFormData({uf: text})}
-						maxLength={UF_MAX_LENGTH}
-						autoCapitalize="characters"
-					/>
+					{isPatient && (
+						<TouchableOpacity
+							style={[styles.secondaryButton, {borderColor: tintColor}]}
+							onPress={handlePickExternalRecordFile}
+						>
+							<Text style={[styles.secondaryButtonText, {color: tintColor}]}>
+								{selectedExternalRecordFile ? `PRONTUARIO: ${selectedExternalRecordFile.name}` : 'SELECIONAR PRONTUARIO (PDF/CSV)'}
+							</Text>
+						</TouchableOpacity>
+					)}
+
+					{isPatient && isFemale && (
+						<>
+							<TouchableOpacity
+								style={[styles.secondaryButton, {borderColor: tintColor}]}
+								onPress={handlePickObstetricFile}
+							>
+								<Text style={[styles.secondaryButtonText, {color: tintColor}]}>
+									{selectedObstetricFile ? `ARQUIVO OBSTÉTRICO: ${selectedObstetricFile.name}` : 'SELECIONAR DADOS OBSTÉTRICOS'}
+								</Text>
+							</TouchableOpacity>
+						</>
+					)}
 				</View>
-				<TouchableOpacity
-					style={[styles.primaryButton, {backgroundColor: tintColor}, isFinishDisabled && styles.buttonDisabled]}
-					onPress={handleRegister}
-					disabled={isFinishDisabled}
-				>
-					<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
+
+				<TouchableOpacity style={[styles.primaryButton, {backgroundColor: tintColor}]} onPress={handleNextStep}>
+					<Text style={styles.primaryButtonText}>PRÓXIMO</Text>
 				</TouchableOpacity>
 			</View>
 		);
@@ -512,11 +754,11 @@ export default function Register() {
 
 		return (
 			<View key={psychologist.id} style={[styles.psychologistItem, {
-				borderColor: borderColor,
-				backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff'
-			}]}>
+				borderColor,
+				backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+			}]}> 
 				<View style={{marginRight: 12}}>
-					<Avatar uri={psychologist.profilePictureUrl} size={40} name={psychologist.name} />
+					<Avatar uri={psychologist.profilePictureUrl} size={40} name={psychologist.name}/>
 				</View>
 				<View style={styles.psychologistInfo}>
 					<Text style={[styles.psychologistName, {color: textColor}]}>{psychologist.name}</Text>
@@ -526,15 +768,11 @@ export default function Register() {
 					style={[
 						styles.linkButton,
 						{backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#eee'},
-						isSelected && {backgroundColor: '#34C759'}
+						isSelected && {backgroundColor: '#34C759'},
 					]}
 					onPress={() => updateFilterState({selectedPsychologistId: psychologist.id})}
 				>
-					<Text style={[
-						styles.linkButtonText,
-						{color: textColor},
-						isSelected && {color: '#fff'}
-					]}>
+					<Text style={[styles.linkButtonText, {color: textColor}, isSelected && {color: '#fff'}]}>
 						{isSelected ? 'Vinculado' : 'Vincular'}
 					</Text>
 				</TouchableOpacity>
@@ -542,12 +780,71 @@ export default function Register() {
 		);
 	};
 
-	const renderPatientDetails = () => {
-		const filteredPsychologists = getFilteredPsychologists();
+	const renderFinalStep = () => {
+		const isPsychologist = userType === USER_TYPES.PSYCHOLOGIST;
+		if (isPsychologist) {
+			const isFinishDisabled = !formData.crp || !formData.uf;
+			return (
+				<View style={styles.formSection}>
+					<Text style={[styles.stepTitle, {color: textColor}]}>Dados Profissionais</Text>
+					<View style={styles.inputGroup}>
+						<GlassInput
+							placeholder="CRP (ex: 06/12345)"
+							value={formData.crp}
+							onChangeText={(text) => updateFormData({crp: formatCrpNumber(text)})}
+							keyboardType="numeric"
+							maxLength={CRP_FORMAT.MAX_LENGTH}
+						/>
+						<GlassInput
+							placeholder="UF (ex: SP)"
+							value={formData.uf}
+							onChangeText={(text) => updateFormData({uf: text})}
+							maxLength={UF_MAX_LENGTH}
+							autoCapitalize="characters"
+						/>
+						<GlassInput
+							placeholder="Duração da sessão (minutos)"
+							value={formData.sessionDurationMinutes}
+							onChangeText={(text) => updateFormData({sessionDurationMinutes: text})}
+							keyboardType="numeric"
+						/>
+						<GlassInput
+							placeholder="Telefone comercial"
+							value={formData.businessPhone}
+							onChangeText={(text) => updateFormData({businessPhone: text})}
+							keyboardType="phone-pad"
+						/>
+						<GlassInput placeholder="Especialidade" value={formData.specialty} onChangeText={(text) => updateFormData({specialty: text})} />
+						<GlassInput
+							placeholder="Texto de apresentação"
+							value={formData.presentationText}
+							onChangeText={(text) => updateFormData({presentationText: text})}
+							multiline
+						/>
+					</View>
+					<TouchableOpacity
+						style={[styles.primaryButton, {backgroundColor: tintColor}, isFinishDisabled && styles.buttonDisabled]}
+						onPress={handleRegister}
+						disabled={isFinishDisabled}
+					>
+						<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
+					</TouchableOpacity>
+				</View>
+			);
+		}
 
+		const filteredPsychologists = getFilteredPsychologists();
 		return (
-			<View style={[styles.formSection, {flex: 1}]}>
+			<View style={[styles.formSection, {flex: 1}]}> 
 				<Text style={[styles.stepTitle, {color: textColor}]}>Vincular Psicólogo</Text>
+				<TouchableOpacity
+					style={[styles.secondaryButton, {borderColor: tintColor}]}
+					onPress={handlePickExternalRecordFile}
+				>
+					<Text style={[styles.secondaryButtonText, {color: tintColor}]}>
+						{selectedExternalRecordFile ? `ARQUIVO: ${selectedExternalRecordFile.name}` : 'SELECIONAR PRONTUÁRIO (PDF/CSV)'}
+					</Text>
+				</TouchableOpacity>
 				<GlassInput
 					placeholder="Buscar por nome ou CRP"
 					value={filterState.searchQuery}
@@ -559,17 +856,14 @@ export default function Register() {
 				) : (
 					<FlatList
 						data={filteredPsychologists}
-						keyExtractor={(item) => item.id.toString()}
+						keyExtractor={(item) => item.id}
 						style={styles.list}
 						contentContainerStyle={{gap: 10}}
 						renderItem={({item}) => renderPsychologistItem(item)}
 					/>
 				)}
 
-				<TouchableOpacity 
-					style={[styles.primaryButton, {backgroundColor: tintColor}]} 
-					onPress={handleRegister}
-				>
+				<TouchableOpacity style={[styles.primaryButton, {backgroundColor: tintColor}]} onPress={handleRegister}>
 					<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
 				</TouchableOpacity>
 			</View>
@@ -578,12 +872,9 @@ export default function Register() {
 
 	const renderHeader = () => (
 		<View style={styles.header}>
-			<TouchableOpacity 
-				onPress={handleBackButton} 
-				style={styles.backButton}
-			>
+			<TouchableOpacity onPress={handleBackButton} style={styles.backButton}>
 				<Text style={[styles.backButtonText, {color: mutedColor}]}>
-					{currentStep === 0 ? 'Cancelar' : 'Voltar'}
+					{currentStep === REGISTRATION_STEPS.AUTH ? 'Cancelar' : 'Voltar'}
 				</Text>
 			</TouchableOpacity>
 		</View>
@@ -593,12 +884,16 @@ export default function Register() {
 		switch (currentStep) {
 		case REGISTRATION_STEPS.AUTH:
 			return renderAuthStep();
+		case REGISTRATION_STEPS.COMMON_DATA:
+			return renderCommonDataStep();
+		case REGISTRATION_STEPS.ADDRESS:
+			return renderAddressStep();
 		case REGISTRATION_STEPS.USER_TYPE:
 			return renderTypeStep();
-		case REGISTRATION_STEPS.DETAILS:
-			return userType === USER_TYPES.PSYCHOLOGIST 
-				? renderPsychologistDetails()
-				: renderPatientDetails();
+		case REGISTRATION_STEPS.RECORD_IMPORT:
+			return renderRecordImportStep();
+		case REGISTRATION_STEPS.FINAL:
+			return renderFinalStep();
 		default:
 			return null;
 		}
@@ -607,11 +902,7 @@ export default function Register() {
 	return (
 		<ThemedView style={styles.container}>
 			<AmbientBackground/>
-
-			<KeyboardAvoidingView
-				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-				style={styles.keyboardView}
-			>
+			<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
 				<AnimatedEntry style={styles.contentContainer}>
 					{renderHeader()}
 					{renderStep()}
@@ -621,7 +912,6 @@ export default function Register() {
 	);
 }
 
-// ============= STYLES =============
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -664,34 +954,8 @@ const styles = StyleSheet.create({
 	inputGroup: {
 		gap: 16,
 	},
-	inputContainer: {
-		width: '100%',
-		position: 'relative',
-	},
-	inputError: {
-		borderColor: '#EF4444',
-		borderWidth: 1,
-	},
-	inputSuccess: {
-		borderColor: '#10B981',
-		borderWidth: 1,
-	},
-	errorText: {
-		color: '#EF4444',
-		fontSize: 12,
-		marginTop: -10,
-		marginLeft: 5,
-	},
-	successText: {
-		color: '#10B981',
-		fontSize: 12,
-		marginTop: -10,
-		marginLeft: 5,
-	},
-	loader: {
-		position: 'absolute',
-		right: 15,
-		top: 15,
+	addressScroll: {
+		flex: 1,
 	},
 	primaryButton: {
 		width: '100%',
@@ -709,6 +973,53 @@ const styles = StyleSheet.create({
 		elevation: 10,
 		marginTop: 20,
 		marginBottom: 40,
+	},
+	secondaryButton: {
+		height: 52,
+		borderRadius: 14,
+		borderWidth: 1,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	secondaryButtonText: {
+		fontSize: 12,
+		fontWeight: '900',
+		letterSpacing: 2,
+		textTransform: 'uppercase',
+	},
+	radioGroup: {
+		gap: 10,
+	},
+	radioGroupTitle: {
+		fontSize: 12,
+		fontWeight: '500',
+		marginLeft: 12,
+	},
+	radioOption: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+		borderWidth: 1,
+		borderRadius: 16,
+		paddingVertical: 18,
+		paddingHorizontal: 24,
+	},
+	radioCircle: {
+		width: 20,
+		height: 20,
+		borderRadius: 10,
+		borderWidth: 2,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	radioDot: {
+		width: 10,
+		height: 10,
+		borderRadius: 5,
+	},
+	radioLabel: {
+		fontSize: 14,
+		fontWeight: '600',
 	},
 	buttonDisabled: {
 		opacity: 0.5,
