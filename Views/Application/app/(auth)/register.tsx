@@ -405,7 +405,13 @@ export default function Register() {
 			setCurrentStep(REGISTRATION_STEPS.USER_TYPE);
 			break;
 		case REGISTRATION_STEPS.USER_TYPE:
-			if (validateUserTypeStep()) setCurrentStep(REGISTRATION_STEPS.RECORD_IMPORT);
+			if (validateUserTypeStep()) {
+				if (userType === USER_TYPES.PSYCHOLOGIST) {
+					setCurrentStep(REGISTRATION_STEPS.FINAL);
+				} else {
+					setCurrentStep(REGISTRATION_STEPS.RECORD_IMPORT);
+				}
+			}
 			break;
 		case REGISTRATION_STEPS.RECORD_IMPORT:
 			setCurrentStep(REGISTRATION_STEPS.FINAL);
@@ -417,6 +423,10 @@ export default function Register() {
 
 	const handlePreviousStep = () => {
 		if (currentStep > 0) {
+			if (currentStep === REGISTRATION_STEPS.FINAL && userType === USER_TYPES.PSYCHOLOGIST) {
+				setCurrentStep(REGISTRATION_STEPS.USER_TYPE);
+				return;
+			}
 			setCurrentStep((currentStep - 1) as RegistrationStep);
 		}
 	};

@@ -108,20 +108,19 @@ const handleUnauthorized = async (): Promise<void> => {
 
 // ============= INTERCEPTORS =============
 api.interceptors.request.use(
-	(config) => {
+	async (config) => {
 		let env = process.env.EXPO_PUBLIC_APP_ENV || null;
 
 		// Attempt to get environment from storage if not set
 		if (!env) {
-			storage.getItem(STORAGE_KEYS.APP_ENV)
-				.then((storedEnv) => {
-					if (storedEnv) {
-						env = storedEnv;
-					}
-				})
-				.catch(() => {
-					// Silently fail - will use email or default
-				});
+			try {
+				const storedEnv = await storage.getItem(STORAGE_KEYS.APP_ENV);
+				if (storedEnv) {
+					env = storedEnv;
+				}
+			} catch {
+				// Silently fail - will use email or default
+			}
 		}
 
 		// Extract environment from request email if still not set
@@ -135,14 +134,15 @@ api.interceptors.request.use(
 		config.headers[HEADERS.CONTEXT_APP] = env || DEFAULT_ENVIRONMENT;
 
 		// Add token from storage
-		return storage.getItem(STORAGE_KEYS.TOKEN)
-			.then((token) => {
-				if (token) {
-					config.headers[HEADERS.AUTHORIZATION] = `Bearer ${token}`;
-				}
-				return config;
-			})
-			.catch(() => config);
+		try {
+			const token = await storage.getItem(STORAGE_KEYS.TOKEN);
+			if (token) {
+				config.headers[HEADERS.AUTHORIZATION] = `Bearer ${token}`;
+			}
+			return config;
+		} catch {
+			return config;
+		}
 	},
 	(error) => Promise.reject(error)
 );
