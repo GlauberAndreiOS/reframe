@@ -18,6 +18,7 @@ export { BiologicalSexRadio } from './ui/biological-sex-radio';
 export { LabeledField } from './ui/labeled-field';
 export { SectionTooltip } from './ui/section-tooltip';
 export { PsychologistPickerModal } from './ui/psychologist-picker-modal';
+export { DocumentPdfViewer } from './ui/document-pdf-viewer';
 export { ReframeLogo } from './ui/reframe-logo';
 export { Toast } from './ui/toast';
 export { VoiceInputAdornment } from './ui/voice-input-adornment';

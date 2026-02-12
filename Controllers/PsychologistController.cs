@@ -182,6 +182,31 @@ public class PsychologistController(ApplicationDbContext context) : ControllerBa
         });
     }
 
+    [HttpGet("patient/{patientId}/documents")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<ActionResult<IEnumerable<PatientDocument>>> GetPatientDocuments(Guid patientId)
+    {
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
+        var psychologist = await context.Psychologists
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (psychologist == null) return NotFound("Psychologist profile not found.");
+
+        var patient = await context.Patients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == patientId);
+
+        if (patient == null) return NotFound("Patient not found.");
+
+        var hasAccess = patient.PsychologistId == psychologist.Id || patient.PendingPsychologistId == psychologist.Id;
+        if (!hasAccess) return Forbid("You do not have access to this patient's documents.");
+
+        return Ok((patient.Documents ?? [])
+            .OrderByDescending(d => d.UploadedAtUtc)
+            .ToList());
+    }
+
     [HttpPut("patient/{patientId}/approve-link")]
     [Authorize(Roles = "Psychologist")]
     public async Task<IActionResult> ApprovePatientLinkRequest(Guid patientId)

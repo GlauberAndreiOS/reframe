@@ -2,8 +2,7 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {ActivityIndicator, FlatList, Linking, Modal, ScrollView, StyleSheet, TouchableOpacity, View} from 'react-native';
 import {Stack, useLocalSearchParams} from 'expo-router';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import Pdf from 'react-native-pdf';
-import {AmbientBackground, GlassInput, IconSymbol, ThemedText, ThemedView} from '@/components';
+import {AmbientBackground, DocumentPdfViewer, GlassInput, IconSymbol, ThemedText, ThemedView} from '@/components';
 import {api, buildFileUrl} from '@/services';
 import type {PatientDocumentDto} from '@/services';
 import {useThemeColor, useColorScheme} from '@/hooks';
@@ -60,10 +59,6 @@ const toHexPreview = (bytes: Uint8Array): string => {
 		.join(' ');
 };
 
-interface PatientProfileResponse {
-	documents?: PatientDocumentDto[] | null;
-}
-
 export default function PsychologistPatientDocumentsScreen() {
 	const {id, name} = useLocalSearchParams();
 	const patientId = Array.isArray(id) ? id[0] : id;
@@ -77,6 +72,7 @@ export default function PsychologistPatientDocumentsScreen() {
 	const mutedColor = useThemeColor({}, 'muted');
 
 	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
 	const [documents, setDocuments] = useState<PatientDocumentDto[]>([]);
 	const [search, setSearch] = useState('');
 	const [viewerVisible, setViewerVisible] = useState(false);
@@ -92,8 +88,8 @@ export default function PsychologistPatientDocumentsScreen() {
 	const fetchDocuments = useCallback(() => {
 		if (!patientId) return;
 		setLoading(true);
-		api.get<PatientProfileResponse>(`/Psychologist/patient/${patientId}/profile`)
-			.then((response) => setDocuments(response.data.documents ?? []))
+		api.get<PatientDocumentDto[]>(`/Psychologist/patient/${patientId}/documents`)
+			.then((response) => setDocuments(response.data ?? []))
 			.catch((error) => {
 				console.error('Failed to load patient documents:', error);
 				showToast('Falha ao carregar documentos.', 'error');
@@ -104,6 +100,18 @@ export default function PsychologistPatientDocumentsScreen() {
 	useEffect(() => {
 		fetchDocuments();
 	}, [fetchDocuments]);
+
+	const refreshDocuments = useCallback(() => {
+		if (!patientId) return;
+		setRefreshing(true);
+		api.get<PatientDocumentDto[]>(`/Psychologist/patient/${patientId}/documents`)
+			.then((response) => setDocuments(response.data ?? []))
+			.catch((error) => {
+				console.error('Failed to refresh patient documents:', error);
+				showToast('Falha ao carregar documentos.', 'error');
+			})
+			.finally(() => setRefreshing(false));
+	}, [patientId, showToast]);
 
 	const filtered = useMemo(() => {
 		const q = search.trim().toLowerCase();
@@ -217,6 +225,8 @@ export default function PsychologistPatientDocumentsScreen() {
 					<FlatList
 						data={filtered}
 						keyExtractor={getDocumentKey}
+						refreshing={refreshing}
+						onRefresh={refreshDocuments}
 						contentContainerStyle={styles.list}
 						ListEmptyComponent={<ThemedText style={{color: mutedColor}}>Nenhum documento.</ThemedText>}
 						renderItem={({item}) => (
@@ -251,8 +261,8 @@ export default function PsychologistPatientDocumentsScreen() {
 							</View>
 							{viewerMode === 'loading' && <View style={styles.center}><ActivityIndicator size="large" color={tintColor}/></View>}
 							{viewerMode === 'pdf' && viewerUrl && (
-								<Pdf
-									source={{uri: viewerUrl, cache: true}}
+								<DocumentPdfViewer
+									uri={viewerUrl}
 									style={styles.pdfView}
 									onError={(error) => {
 										console.error('Failed to render PDF:', error);

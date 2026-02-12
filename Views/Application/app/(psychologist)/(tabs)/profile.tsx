@@ -318,7 +318,7 @@ export default function ProfileScreen() {
 							{renderInfoRow('CRP', profile?.crp)}
 							{renderInfoRow('Email', profile?.email)}
 							{renderInfoRow('Duracao da sessao (min)', sessionDurationMinutes || MESSAGES.NOT_INFORMED)}
-							{renderInfoRow('Telefone comercial', businessPhone || MESSAGES.NOT_INFORMED)}
+							{renderInfoRow('Telefone comercial', businessPhone ? maskPhone(businessPhone) : MESSAGES.NOT_INFORMED)}
 							{renderInfoRow('Especialidade', specialty || MESSAGES.NOT_INFORMED)}
 							{renderInfoRow('Apresentacao', presentationText || MESSAGES.NOT_INFORMED)}
 						</View>

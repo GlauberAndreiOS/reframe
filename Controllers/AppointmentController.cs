@@ -51,7 +51,8 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
             if (patient == null) return BadRequest("Patient profile not found.");
 
-            if (patient.PsychologistId == null) return BadRequest("You must link a psychologist to use this feature.");
+            // If patient is still pending approval/no linked psychologist, agenda must be empty (not an API error).
+            if (patient.PsychologistId == null) return Ok(new List<AppointmentDto>());
 
             var appointments = await context.Appointments
                 .Where(a => a.PsychologistId == patient.PsychologistId 

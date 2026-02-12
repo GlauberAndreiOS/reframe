@@ -118,6 +118,8 @@ export default function QuestionnaireDetailScreen() {
 	);
 	const [toast, setToast] = useState<ToastState | null>(null);
 	const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+	const [isDeleting, setIsDeleting] = useState(false);
+	const [applyingPatientId, setApplyingPatientId] = useState<string | null>(null);
 
 	// ============= EFFECTS =============
 	useEffect(() => {
@@ -137,17 +139,19 @@ export default function QuestionnaireDetailScreen() {
 
 	// ============= HANDLERS =============
 	const fetchData = useCallback((showLoading = false) => {
+		if (!token) {
+			if (showLoading) setLoading(false);
+			setRefreshing(false);
+			return;
+		}
+
 		if (showLoading) {
 			setLoading(true);
 		}
 
 		Promise.all([
-			api.get(`${API_ENDPOINTS.GET_QUESTIONNAIRE}/${id}`, {
-				headers: {Authorization: `Bearer ${token}`},
-			}),
-			api.get(`${API_ENDPOINTS.GET_APPLICATIONS}/${id}`, {
-				headers: {Authorization: `Bearer ${token}`},
-			}),
+			api.get(`${API_ENDPOINTS.GET_QUESTIONNAIRE}/${id}`),
+			api.get(`${API_ENDPOINTS.GET_APPLICATIONS}/${id}`),
 		])
 			.then(([qRes, aRes]) => {
 				setQuestionnaire(qRes.data);
@@ -171,9 +175,10 @@ export default function QuestionnaireDetailScreen() {
 	}, [fetchData]);
 
 	const handleDelete = () => {
-		api.delete(`${API_ENDPOINTS.DELETE_QUESTIONNAIRE}/${id}`, {
-			headers: {Authorization: `Bearer ${token}`},
-		})
+		if (isDeleting) return;
+
+		setIsDeleting(true);
+		api.delete(`${API_ENDPOINTS.DELETE_QUESTIONNAIRE}/${id}`)
 			.then(() => {
 				setToast({message: MESSAGES.DELETE_SUCCESS, type: 'success'});
 				setDeleteModalVisible(false);
@@ -185,13 +190,17 @@ export default function QuestionnaireDetailScreen() {
 				console.error('Error deleting questionnaire:', error);
 				setToast({message: MESSAGES.DELETE_ERROR, type: 'error'});
 				setDeleteModalVisible(false);
+			})
+			.finally(() => {
+				setIsDeleting(false);
 			});
 	};
 
 	const handleApply = (patientId: string) => {
-		api.post(`${API_ENDPOINTS.APPLY_QUESTIONNAIRE}/${id}/${patientId}`, {}, {
-			headers: {Authorization: `Bearer ${token}`},
-		})
+		if (applyingPatientId) return;
+
+		setApplyingPatientId(patientId);
+		api.post(`${API_ENDPOINTS.APPLY_QUESTIONNAIRE}/${id}/${patientId}`, {})
 			.then(() => {
 				setToast({message: MESSAGES.APPLY_SUCCESS, type: 'success'});
 				fetchData();
@@ -199,6 +208,9 @@ export default function QuestionnaireDetailScreen() {
 			.catch((error) => {
 				console.error('Error applying questionnaire:', error);
 				setToast({message: MESSAGES.APPLY_ERROR, type: 'error'});
+			})
+			.finally(() => {
+				setApplyingPatientId(null);
 			});
 	};
 
@@ -234,13 +246,21 @@ export default function QuestionnaireDetailScreen() {
 	};
 
 	const renderApplicationActionButton = (application: Application) => {
+		const isApplyingThisPatient = applyingPatientId === application.patientId;
+		const isApplyDisabled = Boolean(applyingPatientId);
+
 		if (!application.isApplied) {
 			return (
 				<TouchableOpacity
 					style={[styles.applyButton, {backgroundColor: primaryColor}]}
 					onPress={() => handleApply(application.patientId)}
+					disabled={isApplyDisabled}
 				>
-					<ThemedText style={styles.applyButtonText}>{MESSAGES.BUTTON_APPLY}</ThemedText>
+					{isApplyingThisPatient ? (
+						<ActivityIndicator size="small" color="#fff" />
+					) : (
+						<ThemedText style={styles.applyButtonText}>{MESSAGES.BUTTON_APPLY}</ThemedText>
+					)}
 				</TouchableOpacity>
 			);
 		}
@@ -315,8 +335,13 @@ export default function QuestionnaireDetailScreen() {
 			<TouchableOpacity
 				style={[styles.actionIconButton, {backgroundColor: STATUS_COLORS.DANGER}]}
 				onPress={() => setDeleteModalVisible(true)}
+				disabled={isDeleting}
 			>
-				<IconSymbol name="trash" size={16} color="#fff"/>
+				{isDeleting ? (
+					<ActivityIndicator size="small" color="#fff" />
+				) : (
+					<IconSymbol name="trash" size={16} color="#fff"/>
+				)}
 			</TouchableOpacity>
 		</View>
 	);

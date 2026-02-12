@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth, useToast } from '@/context';
 import api from '@/services/api';
@@ -75,7 +75,7 @@ const DIMENSIONS = {
 export default function NewQuestionnaireScreen() {
 	const router = useRouter();
 	const { token } = useAuth();
-	const showToast = useToast();
+	const {showToast} = useToast();
 	const primaryColor = useThemeColor({}, 'tint');
 	const textColor = useThemeColor({}, 'text');
 	const surfaceColor = useThemeColor({}, 'surface');
@@ -97,6 +97,8 @@ export default function NewQuestionnaireScreen() {
 	const [newQuestionTitle, setNewQuestionTitle] = useState('');
 	const [newQuestionType, setNewQuestionType] = useState<'text' | 'select' | 'radio' | 'checkbox'>('text');
 	const [newQuestionOptions, setNewQuestionOptions] = useState<string>('');
+	const [isSaving, setIsSaving] = useState(false);
+	const [isSavingQuestion, setIsSavingQuestion] = useState(false);
 
 	// Effects
 	useEffect(() => {
@@ -119,9 +121,9 @@ export default function NewQuestionnaireScreen() {
 
 	// Fetch patients from API
 	const fetchPatients = () => {
-		api.get(API_ENDPOINTS.GET_PATIENTS, {
-			headers: { Authorization: `Bearer ${token}` }
-		})
+		if (!token) return;
+
+		api.get(API_ENDPOINTS.GET_PATIENTS)
 			.then(response => setPatients(response.data))
 			.catch(error => {
 				console.error('Error fetching patients:', error);
@@ -131,6 +133,8 @@ export default function NewQuestionnaireScreen() {
 
 	// Question handlers
 	const handleAddOrUpdateQuestion = () => {
+		if (isSavingQuestion) return;
+
 		if (!newQuestionTitle.trim()) {
 			showToast(MESSAGES.QUESTION_TITLE_REQUIRED, 'error');
 			return;
@@ -151,15 +155,20 @@ export default function NewQuestionnaireScreen() {
 			data: options
 		};
 
-		if (editingIndex !== null) {
-			const updatedQuestions = [...questions];
-			updatedQuestions[editingIndex] = questionData;
-			setQuestions(updatedQuestions);
-		} else {
-			setQuestions([...questions, questionData]);
-		}
+		setIsSavingQuestion(true);
+		try {
+			if (editingIndex !== null) {
+				const updatedQuestions = [...questions];
+				updatedQuestions[editingIndex] = questionData;
+				setQuestions(updatedQuestions);
+			} else {
+				setQuestions([...questions, questionData]);
+			}
 
-		closeModal();
+			closeModal();
+		} finally {
+			setIsSavingQuestion(false);
+		}
 	};
 
 	const removeQuestion = (index: number) => {
@@ -208,6 +217,8 @@ export default function NewQuestionnaireScreen() {
 
 	// Form submission
 	const handleSave = () => {
+		if (isSaving) return;
+
 		if (!title.trim()) {
 			showToast(MESSAGES.QUESTIONNAIRE_TITLE_REQUIRED, 'error');
 			return;
@@ -217,13 +228,12 @@ export default function NewQuestionnaireScreen() {
 			return;
 		}
 
+		setIsSaving(true);
 		api.post(API_ENDPOINTS.CREATE_QUESTIONNAIRE, {
 			title,
 			questions,
 			isShared,
 			targetPatientIds: selectedPatients.length > 0 ? selectedPatients : null
-		}, {
-			headers: { Authorization: `Bearer ${token}` }
 		})
 			.then(() => {
 				showToast(MESSAGES.CREATE_SUCCESS, 'success');
@@ -234,6 +244,9 @@ export default function NewQuestionnaireScreen() {
 			.catch(error => {
 				console.error('Error creating questionnaire:', error);
 				showToast(MESSAGES.CREATE_ERROR, 'error');
+			})
+			.finally(() => {
+				setIsSaving(false);
 			});
 	};
 
@@ -365,16 +378,22 @@ export default function NewQuestionnaireScreen() {
 						<TouchableOpacity
 							style={[styles.modalButton, { borderColor: surfaceColor, borderWidth: 1 }]}
 							onPress={closeModal}
+							disabled={isSavingQuestion}
 						>
 							<ThemedText>Cancelar</ThemedText>
 						</TouchableOpacity>
 						<TouchableOpacity
 							style={[styles.modalButton, { backgroundColor: primaryColor }]}
 							onPress={handleAddOrUpdateQuestion}
+							disabled={isSavingQuestion}
 						>
-							<ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>
-								{editingIndex !== null ? 'Salvar' : 'Adicionar'}
-							</ThemedText>
+							{isSavingQuestion ? (
+								<ActivityIndicator size="small" color="#fff" />
+							) : (
+								<ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>
+									{editingIndex !== null ? 'Salvar' : 'Adicionar'}
+								</ThemedText>
+							)}
 						</TouchableOpacity>
 					</View>
 				</ThemedView>
@@ -391,8 +410,12 @@ export default function NewQuestionnaireScreen() {
 					<IconSymbol name="chevron.left" size={24} color={textColor} />
 				</TouchableOpacity>
 				<ThemedText type="subtitle">Novo Questionário</ThemedText>
-				<TouchableOpacity onPress={handleSave}>
-					<ThemedText style={{ color: primaryColor, fontWeight: 'bold' }}>Salvar</ThemedText>
+				<TouchableOpacity onPress={handleSave} disabled={isSaving}>
+					{isSaving ? (
+						<ActivityIndicator size="small" color={primaryColor} />
+					) : (
+						<ThemedText style={{ color: primaryColor, fontWeight: 'bold' }}>Salvar</ThemedText>
+					)}
 				</TouchableOpacity>
 			</View>
 

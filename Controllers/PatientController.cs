@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
@@ -14,7 +15,16 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
     : ControllerBase
 {
     private const long MaxFileSizeBytes = 15 * 1024 * 1024;
+    private const int MaxDocumentsPerPatient = 200;
     private static readonly HashSet<string> AllowedExtensions = [".pdf", ".csv", ".txt", ".doc", ".docx"];
+    private static readonly Dictionary<string, HashSet<string>> AllowedMimeTypesByExtension = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".pdf"] = ["application/pdf"],
+        [".csv"] = ["text/csv", "application/csv", "application/vnd.ms-excel", "text/plain"],
+        [".txt"] = ["text/plain"],
+        [".doc"] = ["application/msword", "application/octet-stream"],
+        [".docx"] = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip", "application/octet-stream"]
+    };
 
     private static DateTime? NormalizeToUtc(DateTime? value)
     {
@@ -115,6 +125,18 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
     {
         var safeBase = SanitizeFileName(baseName);
         return $"{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}_{safeBase}{extension}";
+    }
+
+    private static bool IsMimeTypeAllowed(string extension, string? mimeType)
+    {
+        if (!AllowedMimeTypesByExtension.TryGetValue(extension, out var allowedMimeTypes))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(mimeType))
+            return true;
+
+        var normalized = mimeType.Trim().ToLowerInvariant();
+        return allowedMimeTypes.Contains(normalized);
     }
 
     private static PatientDocumentCsvSummary BuildCsvSummary(List<string> lines)
@@ -282,6 +304,8 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(extension))
             return BadRequest($"Extension {extension} not supported.");
+        if (!IsMimeTypeAllowed(extension, file.ContentType))
+            return BadRequest($"Mime type {file.ContentType} is not allowed for extension {extension}.");
 
         var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
         var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
@@ -316,6 +340,8 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
         }
 
         var documents = patient.Documents?.ToList() ?? [];
+        if (documents.Count >= MaxDocumentsPerPatient)
+            return BadRequest($"Maximum number of documents reached ({MaxDocumentsPerPatient}).");
         var relativePath = $"/uploads/{patient.Id}/documents/{storedFileName}";
 
         var document = new PatientDocument
@@ -372,198 +398,16 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
     [Authorize(Roles = "Patient")]
     public async Task<IActionResult> UploadExternalRecord(IFormFile file)
     {
-        if (file == null || file.Length == 0)
-            return BadRequest("No file uploaded.");
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (extension != ".pdf" && extension != ".csv")
-            return BadRequest("Only PDF or CSV files are supported.");
-        if (file.Length > MaxFileSizeBytes)
-            return BadRequest($"File too large. Maximum allowed: {MaxFileSizeBytes / (1024 * 1024)}MB.");
-
-        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
-        if (patient == null)
-            return NotFound("Patient profile not found.");
-
-        var patientFolder = Path.Combine(env.WebRootPath, "uploads", patient.Id.ToString(), "documents");
-        if (!Directory.Exists(patientFolder))
-            Directory.CreateDirectory(patientFolder);
-
-        var storedFileName = BuildStoredFileName(Path.GetFileNameWithoutExtension(file.FileName), extension);
-        var filePath = Path.Combine(patientFolder, storedFileName);
-
-        await using (var stream = new FileStream(filePath, FileMode.Create))
-        {
-            await file.CopyToAsync(stream);
-        }
-
-        var relativePath = $"/uploads/{patient.Id}/documents/{storedFileName}";
-
-        var documents = patient.Documents?.ToList() ?? [];
-        var document = new PatientDocument
-        {
-            Id = Guid.NewGuid(),
-            Kind = "external_record",
-            DisplayName = "Prontuario externo",
-            OriginalFileName = file.FileName,
-            MimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-            Extension = extension,
-            RelativePath = relativePath,
-            SizeBytes = file.Length,
-            UploadedAtUtc = DateTime.UtcNow,
-            UploadedByUserId = userId,
-            CsvSummary = null
-        };
-        documents.Add(document);
-        patient.Documents = documents;
-        context.Entry(patient).Property(p => p.Documents).IsModified = true;
-
-        if (extension == ".pdf")
-        {
-            await context.SaveChangesAsync();
-            return Ok(new { type = "pdf", relativePath });
-        }
-
-        using var reader = new StreamReader(filePath);
-        var content = await reader.ReadToEndAsync();
-        var lines = content
-            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
-            .ToList();
-
-        if (lines.Count < 2)
-            return BadRequest("CSV must contain header and at least one data row.");
-
-        var delimiter = ResolveCsvDelimiter(lines[0]);
-        var headers = ParseCsvLine(lines[0], delimiter);
-        var rows = new List<Dictionary<string, string>>();
-
-        for (var i = 1; i < lines.Count; i++)
-        {
-            var values = ParseCsvLine(lines[i], delimiter);
-            var row = new Dictionary<string, string>();
-
-            for (var j = 0; j < headers.Count; j++)
-            {
-                var key = headers[j];
-                var value = j < values.Count ? values[j] : string.Empty;
-                row[key] = value;
-            }
-
-            rows.Add(row);
-        }
-
-        document.CsvSummary = new PatientDocumentCsvSummary { Rows = rows.Count, Columns = headers };
-        patient.Documents = documents;
-        context.Entry(patient).Property(p => p.Documents).IsModified = true;
-        await context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            type = "csv",
-            rows = rows.Count
-        });
+        return StatusCode(StatusCodes.Status410Gone,
+            "Deprecated endpoint. Use POST /api/Patient/documents/upload with kind=external_record.");
     }
 
     [HttpPost("obstetric-data/upload")]
     [Authorize(Roles = "Patient")]
     public async Task<IActionResult> UploadObstetricData(IFormFile file)
     {
-        if (file == null || file.Length == 0)
-            return BadRequest("No file uploaded.");
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(extension))
-            return BadRequest("Invalid file extension.");
-        if (file.Length > MaxFileSizeBytes)
-            return BadRequest($"File too large. Maximum allowed: {MaxFileSizeBytes / (1024 * 1024)}MB.");
-
-        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
-        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
-        if (patient == null)
-            return NotFound("Patient profile not found.");
-
-        var patientFolder = Path.Combine(env.WebRootPath, "uploads", patient.Id.ToString(), "documents");
-        if (!Directory.Exists(patientFolder))
-            Directory.CreateDirectory(patientFolder);
-
-        var storedFileName = BuildStoredFileName(Path.GetFileNameWithoutExtension(file.FileName), extension);
-        var filePath = Path.Combine(patientFolder, storedFileName);
-
-        await using (var stream = new FileStream(filePath, FileMode.Create))
-        {
-            await file.CopyToAsync(stream);
-        }
-
-        var relativePath = $"/uploads/{patient.Id}/documents/{storedFileName}";
-
-        var documents = patient.Documents?.ToList() ?? [];
-        var document = new PatientDocument
-        {
-            Id = Guid.NewGuid(),
-            Kind = "obstetric_data",
-            DisplayName = "Dados obstetricos",
-            OriginalFileName = file.FileName,
-            MimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-            Extension = extension,
-            RelativePath = relativePath,
-            SizeBytes = file.Length,
-            UploadedAtUtc = DateTime.UtcNow,
-            UploadedByUserId = userId,
-            CsvSummary = null
-        };
-        documents.Add(document);
-        patient.Documents = documents;
-        context.Entry(patient).Property(p => p.Documents).IsModified = true;
-
-        if (extension == ".csv")
-        {
-            using var reader = new StreamReader(filePath);
-            var content = await reader.ReadToEndAsync();
-            var lines = content
-                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
-                .ToList();
-
-            if (lines.Count < 2)
-                return BadRequest("CSV must contain header and at least one data row.");
-
-            var delimiter = ResolveCsvDelimiter(lines[0]);
-            var headers = ParseCsvLine(lines[0], delimiter);
-            var rows = new List<Dictionary<string, string>>();
-
-            for (var i = 1; i < lines.Count; i++)
-            {
-                var values = ParseCsvLine(lines[i], delimiter);
-                var row = new Dictionary<string, string>();
-
-                for (var j = 0; j < headers.Count; j++)
-                {
-                    var key = headers[j];
-                    var value = j < values.Count ? values[j] : string.Empty;
-                    row[key] = value;
-                }
-
-                rows.Add(row);
-            }
-
-            document.CsvSummary = new PatientDocumentCsvSummary { Rows = rows.Count, Columns = headers };
-            patient.Documents = documents;
-            context.Entry(patient).Property(p => p.Documents).IsModified = true;
-            await context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                type = "csv",
-                rows = rows.Count
-            });
-        }
-        await context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            type = "file",
-            relativePath
-        });
+        return StatusCode(StatusCodes.Status410Gone,
+            "Deprecated endpoint. Use POST /api/Patient/documents/upload with kind=obstetric_data.");
     }
 
     [HttpPut("profile")]

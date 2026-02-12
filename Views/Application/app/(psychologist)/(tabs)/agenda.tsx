@@ -797,7 +797,7 @@ export default function PsychologistAgendaScreen() {
 				<TouchableWithoutFeedback onPress={handleCloseRequestDecisionModal}>
 					<View style={styles.requestDecisionOverlay}>
 						<TouchableWithoutFeedback>
-							<View style={styles.requestDecisionContent}>
+							<View style={[styles.requestDecisionContent, {backgroundColor: surfaceColor, borderColor}]}>
 								<View style={styles.modalHeader}>
 									<ThemedText type="subtitle" style={styles.requestDecisionTitle}>
 										{MESSAGES.REQUEST_SLOT_TITLE}

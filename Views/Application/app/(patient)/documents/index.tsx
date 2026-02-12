@@ -3,8 +3,7 @@ import {ActivityIndicator, FlatList, Linking, Modal, ScrollView, StyleSheet, Tou
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {Stack, useFocusEffect} from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
-import Pdf from 'react-native-pdf';
-import {AmbientBackground, GlassInput, IconSymbol, ThemedText, ThemedView} from '@/components';
+import {AmbientBackground, DocumentPdfViewer, GlassInput, IconSymbol, ThemedText, ThemedView} from '@/components';
 import {useColorScheme, useThemeColor} from '@/hooks';
 import {api, buildFileUrl} from '@/services';
 import type {PatientDocumentDto} from '@/services';
@@ -72,10 +71,12 @@ export default function PatientDocumentsScreen() {
 	const mutedColor = useThemeColor({}, 'muted');
 
 	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
 	const [uploading, setUploading] = useState(false);
 	const [documents, setDocuments] = useState<PatientDocumentDto[]>([]);
 	const [search, setSearch] = useState('');
 	const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+	const [uploadKind, setUploadKind] = useState('custom');
 	const [displayName, setDisplayName] = useState('');
 	const [viewerVisible, setViewerVisible] = useState(false);
 	const [viewerUrl, setViewerUrl] = useState<string | null>(null);
@@ -96,6 +97,17 @@ export default function PatientDocumentsScreen() {
 				showToast('Falha ao carregar documentos.', 'error');
 			})
 			.finally(() => setLoading(false));
+	}, [showToast]);
+
+	const refreshDocuments = useCallback(() => {
+		setRefreshing(true);
+		api.get('/Patient/documents')
+			.then((response) => setDocuments(response.data ?? []))
+			.catch((error) => {
+				console.error('Failed to refresh documents:', error);
+				showToast('Falha ao carregar documentos.', 'error');
+			})
+			.finally(() => setRefreshing(false));
 	}, [showToast]);
 
 	useFocusEffect(useCallback(() => {
@@ -231,7 +243,7 @@ export default function PatientDocumentsScreen() {
 				name: selectedFile.name,
 				type: selectedFile.mimeType || 'application/octet-stream',
 			} as any);
-			form.append('kind', 'custom');
+			form.append('kind', uploadKind.trim() || 'custom');
 			if (displayName.trim()) form.append('displayName', displayName.trim());
 
 			await api.post('/Patient/documents/upload', form, {
@@ -239,6 +251,7 @@ export default function PatientDocumentsScreen() {
 			});
 			showToast('Documento enviado.', 'success');
 			setDisplayName('');
+			setUploadKind('custom');
 			setSelectedFile(null);
 			fetchDocuments();
 		} catch (error) {
@@ -288,6 +301,11 @@ export default function PatientDocumentsScreen() {
 							</ThemedText>
 						</TouchableOpacity>
 						<GlassInput placeholder="Nome exibicao (opcional)" value={displayName} onChangeText={setDisplayName}/>
+						<GlassInput
+							placeholder="Tipo do documento (kind)"
+							value={uploadKind}
+							onChangeText={(text) => setUploadKind(text.slice(0, 50))}
+						/>
 						<TouchableOpacity
 							style={[
 								styles.uploadButton,
@@ -309,8 +327,22 @@ export default function PatientDocumentsScreen() {
 							<FlatList
 								data={filtered}
 								keyExtractor={getDocumentKey}
+								refreshing={refreshing}
+								onRefresh={refreshDocuments}
 								contentContainerStyle={styles.list}
-								ListEmptyComponent={<ThemedText style={{color: mutedColor}}>Nenhum documento.</ThemedText>}
+								ListEmptyComponent={(
+									<View style={styles.emptyState}>
+										<ThemedText style={{color: mutedColor}}>Nenhum documento.</ThemedText>
+										<TouchableOpacity
+											style={[styles.emptyActionButton, {borderColor: tintColor}]}
+											onPress={handlePickDocument}
+										>
+											<ThemedText style={[styles.emptyActionButtonText, {color: tintColor}]}>
+												Selecionar documento
+											</ThemedText>
+										</TouchableOpacity>
+									</View>
+								)}
 								renderItem={({item}) => (
 									<View style={[styles.item, {borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : cardColor}]}>
 										<View style={{flex: 1}}>
@@ -348,8 +380,8 @@ export default function PatientDocumentsScreen() {
 							</View>
 							{viewerMode === 'loading' && <View style={styles.center}><ActivityIndicator size="large" color={tintColor}/></View>}
 							{viewerMode === 'pdf' && viewerUrl && (
-								<Pdf
-									source={{uri: viewerUrl, cache: true}}
+								<DocumentPdfViewer
+									uri={viewerUrl}
 									style={styles.pdfView}
 									trustAllCerts={false}
 									onError={(error) => {
@@ -445,6 +477,16 @@ const styles = StyleSheet.create({
 	uploadButtonText: {color: '#fff', fontWeight: '700'},
 	center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
 	list: {paddingTop: 6, paddingBottom: 10, gap: 10},
+	emptyState: {alignItems: 'center', gap: 10, paddingTop: 20},
+	emptyActionButton: {
+		height: 40,
+		paddingHorizontal: 14,
+		borderRadius: 10,
+		borderWidth: 1,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	emptyActionButtonText: {fontSize: 12, fontWeight: '700'},
 	item: {borderWidth: 1, borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8},
 	itemTitle: {fontSize: 14, fontWeight: '700'},
 	actionBtn: {width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center'},

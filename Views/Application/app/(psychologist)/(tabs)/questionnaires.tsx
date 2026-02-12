@@ -78,13 +78,17 @@ export default function QuestionnairesScreen() {
 
 	// ============= HANDLERS =============
 	const fetchQuestionnaires = useCallback((showLoading = false) => {
+		if (!token) {
+			if (showLoading) setLoading(false);
+			setRefreshing(false);
+			return;
+		}
+
 		if (showLoading) {
 			setLoading(true);
 		}
 
-		api.get(API_ENDPOINTS.GET_QUESTIONNAIRES, {
-			headers: {Authorization: `Bearer ${token}`},
-		})
+		api.get(API_ENDPOINTS.GET_QUESTIONNAIRES)
 			.then((response) => {
 				setQuestionnaires(response.data);
 			})

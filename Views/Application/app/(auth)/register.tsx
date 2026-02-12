@@ -23,7 +23,7 @@ import {
 import type {HelperTextType} from '@/components';
 import {useThemeColor, useColorScheme} from '@/hooks';
 import {useToast} from '@/context';
-import {maskCPF, maskDate, unmaskCPF} from '@/utils';
+import {maskCPF, maskDate, maskPhone, unmaskCPF, unmaskPhone} from '@/utils';
 
 type UserType = 'patient' | 'psychologist' | null;
 type RegistrationStep = 0 | 1 | 2 | 3 | 4 | 5;
@@ -56,7 +56,6 @@ interface RegistrationFormState {
 	city: string;
 	state: string;
 	zipCode: string;
-	obstetricData: string;
 	crp: string;
 	uf: string;
 	sessionDurationMinutes: string;
@@ -171,7 +170,7 @@ const buildPsychologistRegistrationPayload = (form: RegistrationFormState) => ({
 	crpUf: form.uf,
 	...buildCommonPayload(form),
 	sessionDurationMinutes: form.sessionDurationMinutes ? Number(form.sessionDurationMinutes) : null,
-	businessPhone: form.businessPhone || null,
+	businessPhone: unmaskPhone(form.businessPhone) || null,
 	specialty: form.specialty || null,
 	presentationText: form.presentationText || null,
 });
@@ -182,8 +181,6 @@ const buildPatientRegistrationPayload = (form: RegistrationFormState, psychologi
 	userType: 1,
 	psychologistId,
 	...buildCommonPayload(form),
-	externalRecord: null,
-	obstetricData: null,
 });
 
 const handleRegistrationError = (error: any): string => {
@@ -235,7 +232,6 @@ export default function Register() {
 		city: '',
 		state: '',
 		zipCode: '',
-		obstetricData: '',
 		crp: '',
 		uf: '',
 		sessionDurationMinutes: '',
@@ -248,6 +244,7 @@ export default function Register() {
 	const [passwordHelper, setPasswordHelper] = useState<HelperMessage | null>(null);
 	const [isCheckingUsername, setIsCheckingUsername] = useState(false);
 	const [isLoadingZipCode, setIsLoadingZipCode] = useState(false);
+	const [isRegistering, setIsRegistering] = useState(false);
 
 	const [psychologists, setPsychologists] = useState<Psychologist[]>([]);
 	const [isLoadingPsychologists, setIsLoadingPsychologists] = useState(false);
@@ -440,6 +437,31 @@ export default function Register() {
 	};
 
 	const handleRegister = useCallback(() => {
+		if (isRegistering) return;
+
+		const uploadDocument = async (
+			token: string,
+			kind: 'external_record' | 'obstetric_data',
+			documentFile: DocumentPicker.DocumentPickerAsset,
+			displayName?: string
+		) => {
+			const form = new FormData();
+			form.append('file', {
+				uri: documentFile.uri,
+				name: documentFile.name,
+				type: documentFile.mimeType || 'application/octet-stream',
+			} as any);
+			form.append('kind', kind);
+			if (displayName) form.append('displayName', displayName);
+
+			await api.post('/Patient/documents/upload', form, {
+				headers: {
+					'Content-Type': 'multipart/form-data',
+					Authorization: `Bearer ${token}`,
+				},
+			});
+		};
+
 		const uploadExternalRecordIfNeeded = async () => {
 			if (userType !== USER_TYPES.PATIENT || !selectedExternalRecordFile) return;
 
@@ -451,34 +473,10 @@ export default function Register() {
 			const token = loginResponse.data?.token;
 			if (!token) return;
 
-			const form = new FormData();
-			form.append('file', {
-				uri: selectedExternalRecordFile.uri,
-				name: selectedExternalRecordFile.name,
-				type: selectedExternalRecordFile.mimeType || 'application/octet-stream',
-			} as any);
-
-			await api.post('/Patient/external-record/upload', form, {
-				headers: {
-					'Content-Type': 'multipart/form-data',
-					Authorization: `Bearer ${token}`,
-				},
-			});
+			await uploadDocument(token, 'external_record', selectedExternalRecordFile, 'Prontuario externo');
 
 			if (selectedObstetricFile) {
-				const obstetricForm = new FormData();
-				obstetricForm.append('file', {
-					uri: selectedObstetricFile.uri,
-					name: selectedObstetricFile.name,
-					type: selectedObstetricFile.mimeType || 'application/octet-stream',
-				} as any);
-
-				await api.post('/Patient/obstetric-data/upload', obstetricForm, {
-					headers: {
-						'Content-Type': 'multipart/form-data',
-						Authorization: `Bearer ${token}`,
-					},
-				});
+				await uploadDocument(token, 'obstetric_data', selectedObstetricFile, 'Dados obstetricos');
 			}
 		};
 
@@ -497,11 +495,16 @@ export default function Register() {
 			setTimeout(() => router.replace('/(auth)/login'), REDIRECT_DELAY_MS);
 		};
 
-		execute().catch(error => {
-			console.error('Registration error:', error);
-			showToast(handleRegistrationError(error), 'error');
-		});
-	}, [formData, filterState.selectedPsychologistId, router, showToast, userType, validatePsychologistFinalStep, selectedExternalRecordFile, selectedObstetricFile]);
+		setIsRegistering(true);
+		execute()
+			.catch(error => {
+				console.error('Registration error:', error);
+				showToast(handleRegistrationError(error), 'error');
+			})
+			.finally(() => {
+				setIsRegistering(false);
+			});
+	}, [formData, filterState.selectedPsychologistId, isRegistering, router, showToast, userType, validatePsychologistFinalStep, selectedExternalRecordFile, selectedObstetricFile]);
 
 	const handlePickExternalRecordFile = async () => {
 		try {
@@ -793,7 +796,7 @@ export default function Register() {
 	const renderFinalStep = () => {
 		const isPsychologist = userType === USER_TYPES.PSYCHOLOGIST;
 		if (isPsychologist) {
-			const isFinishDisabled = !formData.crp || !formData.uf;
+			const isFinishDisabled = !formData.crp || !formData.uf || isRegistering;
 			return (
 				<View style={styles.formSection}>
 					<Text style={[styles.stepTitle, {color: textColor}]}>Dados Profissionais</Text>
@@ -821,8 +824,9 @@ export default function Register() {
 						<GlassInput
 							placeholder="Telefone comercial"
 							value={formData.businessPhone}
-							onChangeText={(text) => updateFormData({businessPhone: text})}
+							onChangeText={(text) => updateFormData({businessPhone: maskPhone(text)})}
 							keyboardType="phone-pad"
+							maxLength={15}
 						/>
 						<GlassInput placeholder="Especialidade" value={formData.specialty} onChangeText={(text) => updateFormData({specialty: text})} />
 						<GlassInput
@@ -837,7 +841,11 @@ export default function Register() {
 						onPress={handleRegister}
 						disabled={isFinishDisabled}
 					>
-						<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
+						{isRegistering ? (
+							<ActivityIndicator size="small" color="#FFFFFF" />
+						) : (
+							<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
+						)}
 					</TouchableOpacity>
 				</View>
 			);
@@ -873,8 +881,16 @@ export default function Register() {
 					/>
 				)}
 
-				<TouchableOpacity style={[styles.primaryButton, {backgroundColor: tintColor}]} onPress={handleRegister}>
-					<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
+				<TouchableOpacity
+					style={[styles.primaryButton, {backgroundColor: tintColor}, isRegistering && styles.buttonDisabled]}
+					onPress={handleRegister}
+					disabled={isRegistering}
+				>
+					{isRegistering ? (
+						<ActivityIndicator size="small" color="#FFFFFF" />
+					) : (
+						<Text style={styles.primaryButtonText}>FINALIZAR CADASTRO</Text>
+					)}
 				</TouchableOpacity>
 			</View>
 		);

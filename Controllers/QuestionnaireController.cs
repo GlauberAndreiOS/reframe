@@ -12,6 +12,16 @@ namespace reframe.Controllers;
 [Authorize]
 public class QuestionnaireController(ApplicationDbContext context) : ControllerBase
 {
+    private static List<Question> CloneQuestions(IEnumerable<Question> source)
+    {
+        return source.Select(q => new Question
+        {
+            Title = q.Title,
+            Type = q.Type,
+            Data = q.Data != null ? new List<string>(q.Data) : null
+        }).ToList();
+    }
+
     [HttpPost]
     [Authorize(Roles = "Psychologist")]
     public async Task<ActionResult<Questionnaire>> CreateQuestionnaire(CreateQuestionnaireDto dto)
@@ -29,6 +39,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
             Title = dto.Title,
             PsychologistId = psychologist.Id,
             TargetPatientId = null,
+            MasterQuestionnaireId = null,
             Questions = dto.Questions.Select(q => new Question
             {
                 Title = q.Title,
@@ -49,7 +60,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
                 Title = masterQuestionnaire.Title,
                 Description = "Shared by a user.",
                 Category = "User Shared",
-                Questions = masterQuestionnaire.Questions,
+                Questions = CloneQuestions(masterQuestionnaire.Questions),
                 IsGlobal = false,
                 OriginalPsychologistId = psychologist.Id,
                 CreatedAt = DateTime.UtcNow
@@ -70,16 +81,11 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
                     Title = masterQuestionnaire.Title,
                     PsychologistId = psychologist.Id,
                     TargetPatientId = patientId,
-                    Questions = masterQuestionnaire.Questions,
+                    MasterQuestionnaireId = masterQuestionnaire.Id,
+                    Questions = CloneQuestions(masterQuestionnaire.Questions),
                     IsShared = false,
                     CreatedAt = DateTime.UtcNow
                 };
-                patientQuestionnaire.Questions = masterQuestionnaire.Questions.Select(q => new Question
-                {
-                    Title = q.Title,
-                    Type = q.Type,
-                    Data = q.Data != null ? new List<string>(q.Data) : null
-                }).ToList();
 
                 context.Questionnaires.Add(patientQuestionnaire);
             }
@@ -140,10 +146,16 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
 
                 var questionnaires = await context.Questionnaires
                     .Where(q => q.PsychologistId == patient.PsychologistId && q.TargetPatientId == patient.Id)
-                    .Where(q => context.Questionnaires.Any(master =>
-                        master.PsychologistId == q.PsychologistId &&
-                        master.TargetPatientId == null &&
-                        master.Title == q.Title))
+                    .Where(q =>
+                        q.MasterQuestionnaireId != null
+                            ? context.Questionnaires.Any(master =>
+                                master.Id == q.MasterQuestionnaireId &&
+                                master.PsychologistId == q.PsychologistId &&
+                                master.TargetPatientId == null)
+                            : context.Questionnaires.Any(master =>
+                                master.PsychologistId == q.PsychologistId &&
+                                master.TargetPatientId == null &&
+                                master.Title == q.Title))
                     .OrderByDescending(q => q.CreatedAt)
                     .ToListAsync();
 
@@ -227,7 +239,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
         {
             if (existingTemplate != null)
             {
-                existingTemplate.Questions = questionnaire.Questions;
+                existingTemplate.Questions = CloneQuestions(questionnaire.Questions);
                 context.Entry(existingTemplate).State = EntityState.Modified;
             }
             else
@@ -238,7 +250,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
                     Title = questionnaire.Title,
                     Description = "Shared by a user.",
                     Category = "User Shared",
-                    Questions = questionnaire.Questions,
+                    Questions = CloneQuestions(questionnaire.Questions),
                     IsGlobal = false,
                     OriginalPsychologistId = psychologist.Id,
                     CreatedAt = DateTime.UtcNow
@@ -430,12 +442,8 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
             Id = Guid.NewGuid(),
             Title = template.Title,
             PsychologistId = psychologist.Id,
-            Questions = template.Questions.Select(q => new Question
-            {
-                Title = q.Title,
-                Type = q.Type,
-                Data = q.Data
-            }).ToList(),
+            MasterQuestionnaireId = null,
+            Questions = CloneQuestions(template.Questions),
             IsShared = false,
             CreatedAt = DateTime.UtcNow
         };
@@ -463,7 +471,9 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
         if (questionnaire.PsychologistId != psychologist.Id) return Forbid();
 
         var assignedQuestionnaires = await context.Questionnaires
-            .Where(q => q.PsychologistId == psychologist.Id && q.Title == questionnaire.Title && q.TargetPatientId != null)
+            .Where(q => q.PsychologistId == psychologist.Id &&
+                        q.TargetPatientId != null &&
+                        q.MasterQuestionnaireId == questionnaire.Id)
             .ToListAsync();
 
         var applications = new List<QuestionnaireApplicationDto>();
@@ -519,7 +529,9 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
         if (masterQuestionnaire.PsychologistId != psychologist.Id) return Forbid();
 
         var existing = await context.Questionnaires
-            .FirstOrDefaultAsync(q => q.PsychologistId == psychologist.Id && q.TargetPatientId == patientId && q.Title == masterQuestionnaire.Title);
+            .FirstOrDefaultAsync(q => q.PsychologistId == psychologist.Id &&
+                                      q.TargetPatientId == patientId &&
+                                      q.MasterQuestionnaireId == masterQuestionnaire.Id);
             
         if (existing != null) return BadRequest("Questionnaire already applied to this patient.");
 
@@ -529,7 +541,8 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
             Title = masterQuestionnaire.Title,
             PsychologistId = psychologist.Id,
             TargetPatientId = patientId,
-            Questions = masterQuestionnaire.Questions,
+            MasterQuestionnaireId = masterQuestionnaire.Id,
+            Questions = CloneQuestions(masterQuestionnaire.Questions),
             IsShared = false,
             CreatedAt = DateTime.UtcNow
         };

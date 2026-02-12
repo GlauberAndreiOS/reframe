@@ -21,6 +21,9 @@ public class Questionnaire
     [ForeignKey("TargetPatientId")]
     [JsonIgnore]
     public Patient? TargetPatient { get; set; }
+    
+    // For patient-targeted questionnaires, points to the master questionnaire.
+    public Guid? MasterQuestionnaireId { get; set; }
 
     public List<Question> Questions { get; set; } = new();
     
