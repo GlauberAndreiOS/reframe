@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reframe",
     "slug": "reframe",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo(Dark).png",
     "scheme": "application",
@@ -16,7 +16,7 @@
           "fetch"
         ]
       },
-      "buildNumber": "2.1.0"
+      "buildNumber": "2.2.0"
     },
     "android": {
       "backgroundColor": "#151718",
@@ -26,7 +26,7 @@
         "backgroundColor": "#151718"
       },
       "package": "com.gandreidev.reframe",
-      "versionCode": 8
+      "versionCode": 9
     },
     "plugins": [
       "expo-router",
