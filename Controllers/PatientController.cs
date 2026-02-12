@@ -265,8 +265,9 @@ public class PatientController(ApplicationDbContext context, ILogger<PatientCont
     }
 
     [HttpPost("documents/upload")]
+    [Consumes("multipart/form-data")]
     [Authorize(Roles = "Patient")]
-    public async Task<IActionResult> UploadDocument([FromForm] IFormFile file, [FromForm] string kind, [FromForm] string? displayName)
+    public async Task<IActionResult> UploadDocument(IFormFile file, [FromForm] string kind, [FromForm] string? displayName)
     {
         if (file == null || file.Length == 0)
             return BadRequest("No file uploaded.");
