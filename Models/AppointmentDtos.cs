@@ -11,6 +11,10 @@ public class AppointmentDto
     public DateTime Start { get; set; }
     public DateTime End { get; set; }
     public AppointmentStatus Status { get; set; }
+    public SessionStatus SessionStatus { get; set; }
+    public PaymentStatus PaymentStatus { get; set; }
+    public ChargeDecision? ChargeDecision { get; set; }
+    public string? DecisionReason { get; set; }
     public string? Reason { get; set; }
 }
 
