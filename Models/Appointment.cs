@@ -9,7 +9,8 @@ public enum AppointmentStatus
     Available = 0,
     Requested = 1,
     Confirmed = 2,
-    Canceled = 3
+    Canceled = 3,
+    NoShow = 4
 }
 
 public class Appointment

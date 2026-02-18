@@ -5,13 +5,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using reframe.Data;
 using reframe.Models;
+using reframe.Services;
 
 namespace reframe.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class AppointmentController(ApplicationDbContext context) : ControllerBase
+public class AppointmentController(ApplicationDbContext context, INotificationDispatcher notificationDispatcher) : ControllerBase
 {
     private Guid GetUserId() => Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
 
@@ -168,6 +169,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         slot.Reason = dto.Reason;
 
         await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionCreated, slot.Id);
         return Ok(MapToDto(slot));
     }
 
@@ -262,6 +264,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         currentAppointment.Status = AppointmentStatus.Available;
 
         await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionRescheduled, targetSlot.Id);
         return Ok(MapToDto(targetSlot));
     }
 
@@ -315,6 +318,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             else if (dto.Status == AppointmentStatus.Canceled)
             {
                 appointment.Status = AppointmentStatus.Canceled;
+                await notificationDispatcher.DispatchAsync(NotificationTemplate.CancellationWindowClosing, appointment.Id);
             }
              else if (dto.NewStart.HasValue && dto.NewEnd.HasValue)
             {
@@ -343,6 +347,25 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         }
 
         await context.SaveChangesAsync();
+        return Ok(MapToDto(appointment));
+    }
+
+    [HttpPut("{id}/mark-no-show")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<IActionResult> MarkNoShow(Guid id)
+    {
+        var userId = GetUserId();
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (psychologist == null) return BadRequest("Psychologist profile not found.");
+
+        var appointment = await context.Appointments.FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+        if (appointment.PsychologistId != psychologist.Id) return Forbid();
+
+        appointment.Status = AppointmentStatus.NoShow;
+        await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionNoShow, appointment.Id);
+
         return Ok(MapToDto(appointment));
     }
 
@@ -430,6 +453,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             appointment.Status = AppointmentStatus.Available;
 
             await context.SaveChangesAsync();
+            await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionRescheduled, targetSlot.Id);
             return Ok(MapToDto(targetSlot));
         }
 
@@ -463,6 +487,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         context.Appointments.Add(newAppointment);
 
         await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionRescheduled, newAppointment.Id);
         return Ok(MapToDto(newAppointment));
     }
 

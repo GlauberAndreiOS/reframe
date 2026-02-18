@@ -17,3 +17,6 @@ export type {
 	PatientProfileUpdatePayload,
 	PsychologistProfileUpdatePayload,
 } from './profile-types';
+
+// ============= FINANCE SERVICE =============
+export {financeService, type SessionReceipt, type ReceiptNotificationLog} from './finance-service';

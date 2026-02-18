@@ -13,6 +13,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<QuestionnaireTemplate> QuestionnaireTemplates { get; set; }
     public DbSet<QuestionnaireResponse> QuestionnaireResponses { get; set; }
     public DbSet<Appointment> Appointments { get; set; }
+    public DbSet<NotificationLog> NotificationLogs { get; set; }
+    public DbSet<SessionReceipt> SessionReceipts { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -107,5 +109,21 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(a => a.PatientId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<NotificationLog>()
+            .HasOne(n => n.Appointment)
+            .WithMany()
+            .HasForeignKey(n => n.AppointmentId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<SessionReceipt>()
+            .HasIndex(r => r.AppointmentId)
+            .IsUnique();
+
+        modelBuilder.Entity<SessionReceipt>()
+            .HasOne(r => r.Appointment)
+            .WithMany()
+            .HasForeignKey(r => r.AppointmentId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
