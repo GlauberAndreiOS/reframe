@@ -30,8 +30,17 @@ namespace reframe.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("BillingDecisionAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ChargeDecision")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionReason")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("End")
                         .HasColumnType("timestamp with time zone");
@@ -42,11 +51,17 @@ namespace reframe.Migrations
                     b.Property<Guid>("PsychologistId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("PaymentStatus")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Reason")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("Start")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SessionStatus")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -150,6 +165,9 @@ namespace reframe.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("BillingChargeTiming")
+                        .HasColumnType("integer");
+
                     b.Property<string>("BusinessPhone")
                         .HasColumnType("text");
 
@@ -159,6 +177,9 @@ namespace reframe.Migrations
 
                     b.Property<string>("PresentationText")
                         .HasColumnType("text");
+
+                    b.Property<int>("FreeCancellationWindowHours")
+                        .HasColumnType("integer");
 
                     b.Property<int?>("SessionDurationMinutes")
                         .HasColumnType("integer");
