@@ -1,7 +1,7 @@
 import {StyleSheet, ScrollView, TouchableOpacity, RefreshControl, View, Modal, TouchableWithoutFeedback, ActivityIndicator, FlatList, TextInput} from 'react-native';
 import {useEffect, useState, useCallback} from 'react';
 import {ThemedText, ThemedView, DateStrip, IconSymbol, Toast} from '@/components';
-import {appointmentService, Appointment, PatientDayStatus} from '@/services';
+import {appointmentService, Appointment, PatientDayStatus, CurrentTerms} from '@/services';
 import {useThemeColor, useColorScheme} from '@/hooks';
 
 // ============= TYPES & INTERFACES =============
@@ -57,6 +57,9 @@ const MESSAGES = {
 	EMPTY: 'Nenhum horário disponível para este dia.',
 	CANCEL: 'Cancelar',
 	REQUEST: 'Solicitar',
+	TERMS_TITLE: 'Termos vigentes',
+	TERMS_ACCEPT_LABEL: 'Li e aceito os termos para este agendamento.',
+	TERMS_REQUIRED: 'Você precisa aceitar os termos vigentes.',
 } as const;
 
 const TIME_FORMAT_OPTIONS = {
@@ -89,6 +92,9 @@ export default function PatientAgendaScreen() {
 	const [selectedRequestedSlot, setSelectedRequestedSlot] = useState<Appointment | null>(null);
 	const [selectedConfirmedSlot, setSelectedConfirmedSlot] = useState<Appointment | null>(null);
 	const [isRequesting, setIsRequesting] = useState(false);
+	const [currentTerms, setCurrentTerms] = useState<CurrentTerms | null>(null);
+	const [loadingTerms, setLoadingTerms] = useState(false);
+	const [acceptTermsChecked, setAcceptTermsChecked] = useState(false);
 	const [isCancellingRequest, setIsCancellingRequest] = useState(false);
 	const [isRescheduling, setIsRescheduling] = useState(false);
 	const [isCancellingConfirmed, setIsCancellingConfirmed] = useState(false);
@@ -171,6 +177,23 @@ export default function PatientAgendaScreen() {
 	const handleRequestAppointment = (slot: Appointment) => {
 		setSelectedSlot(slot);
 		setRequestModalVisible(true);
+		setLoadingTerms(true);
+		setCurrentTerms(null);
+		setAcceptTermsChecked(false);
+
+		appointmentService.getCurrentTerms(slot.id)
+			.then((terms) => {
+				setCurrentTerms(terms);
+				setAcceptTermsChecked(terms.alreadyAccepted);
+			})
+			.catch((error) => {
+				if (error?.response?.status !== 404) {
+					console.error('Error fetching terms:', error);
+				}
+			})
+			.finally(() => {
+				setLoadingTerms(false);
+			});
 	};
 
 	const handleOpenConfirmedActions = (slot: Appointment) => {
@@ -263,11 +286,18 @@ export default function PatientAgendaScreen() {
 	const closeRequestModal = () => {
 		setRequestModalVisible(false);
 		setSelectedSlot(null);
+		setCurrentTerms(null);
+		setAcceptTermsChecked(false);
 	};
 
 	const confirmRequestAppointment = (slotId: string) => {
+		if (currentTerms && !currentTerms.alreadyAccepted && !acceptTermsChecked) {
+			showToast(MESSAGES.TERMS_REQUIRED, 'error');
+			return;
+		}
+
 		setIsRequesting(true);
-		appointmentService.requestAppointment(slotId)
+		appointmentService.requestAppointment(slotId, undefined, !!currentTerms && !currentTerms.alreadyAccepted && acceptTermsChecked)
 			.then(() => {
 				showToast(MESSAGES.SUCCESS_REQUEST, 'success');
 				closeRequestModal();
@@ -399,6 +429,32 @@ export default function PatientAgendaScreen() {
 								<ThemedText style={styles.modalMessage}>
 									{MESSAGES.CONFIRM_REQUEST} {slotTime}?
 								</ThemedText>
+								{loadingTerms ? (
+									<ActivityIndicator size="small" color="#0a7ea4" style={styles.termsLoading}/>
+								) : currentTerms ? (
+									<View style={styles.termsContainer}>
+										<ThemedText style={styles.termsTitle}>{MESSAGES.TERMS_TITLE} (v{currentTerms.version})</ThemedText>
+										<ScrollView style={styles.termsContent}>
+											<ThemedText style={styles.termsText}>{currentTerms.content}</ThemedText>
+										</ScrollView>
+										<TouchableOpacity
+											style={styles.termsAcceptRow}
+											onPress={() => {
+												if (!currentTerms.alreadyAccepted) setAcceptTermsChecked((prev) => !prev);
+											}}
+											disabled={currentTerms.alreadyAccepted}
+										>
+											<IconSymbol
+												name={acceptTermsChecked ? 'check-box' : 'check-box-outline-blank'}
+												size={22}
+												color={acceptTermsChecked ? '#27ae60' : mutedColor}
+											/>
+											<ThemedText style={styles.termsAcceptText}>
+												{currentTerms.alreadyAccepted ? 'Termos já aceitos para esta versão.' : MESSAGES.TERMS_ACCEPT_LABEL}
+											</ThemedText>
+										</TouchableOpacity>
+									</View>
+								) : null}
 								<View style={styles.modalActions}>
 									<TouchableOpacity
 										style={[styles.modalButton, styles.modalConfirmButton]}
@@ -855,6 +911,35 @@ const styles = StyleSheet.create({
 	modalConfirmText: {
 		color: '#fff',
 		fontWeight: '700',
+	},
+	termsLoading: {
+		marginBottom: 12,
+	},
+	termsContainer: {
+		borderWidth: 1,
+		borderColor: '#d1d5db',
+		borderRadius: 10,
+		padding: 10,
+		marginBottom: 12,
+		gap: 8,
+	},
+	termsTitle: {
+		fontWeight: '700',
+	},
+	termsContent: {
+		maxHeight: 120,
+	},
+	termsText: {
+		opacity: 0.8,
+	},
+	termsAcceptRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	termsAcceptText: {
+		flex: 1,
+		fontSize: 13,
 	},
 	searchInput: {
 		height: 42,

@@ -31,6 +31,16 @@ public class Appointment
 
     public AppointmentStatus Status { get; set; } = AppointmentStatus.Available;
 
+    public SessionStatus SessionStatus { get; set; } = SessionStatus.Scheduled;
+
+    public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
+
+    public ChargeDecision? ChargeDecision { get; set; }
+
+    public string? DecisionReason { get; set; }
+
+    public DateTime? BillingDecisionAt { get; set; }
+
     public string? Reason { get; set; }
 
     public DateTime? ChargeFailedAtUtc { get; set; }
