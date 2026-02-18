@@ -12,6 +12,9 @@ public class AppointmentDto
     public DateTime End { get; set; }
     public AppointmentStatus Status { get; set; }
     public string? Reason { get; set; }
+    public Guid? TherapyPackageId { get; set; }
+    public bool IsExtraSession { get; set; }
+    public bool SessionConsumed { get; set; }
 }
 
 public class CreateSlotsDto
@@ -26,6 +29,27 @@ public class BookAppointmentDto
 {
     public Guid SlotId { get; set; }
     public string? Reason { get; set; }
+    public Guid? TherapyPackageId { get; set; }
+    public bool IsExtraSession { get; set; }
+}
+
+public class PrebookRecurringAppointmentsDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public List<DayOfWeek> Weekdays { get; set; } = new();
+    public string Time { get; set; } = "09:00";
+    public int DurationMinutes { get; set; } = 50;
+    public int OffsetMinutes { get; set; }
+    public Guid? TherapyPackageId { get; set; }
+    public bool IsExtraSession { get; set; }
+    public string? Reason { get; set; }
+}
+
+public class PrebookRecurringResultDto
+{
+    public List<AppointmentDto> ReservedAppointments { get; set; } = new();
+    public List<string> SkippedDates { get; set; } = new();
 }
 
 public class UpdateAppointmentStatusDto

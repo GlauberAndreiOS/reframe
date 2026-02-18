@@ -56,6 +56,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
 
             var appointments = await context.Appointments
                 .Where(a => a.PsychologistId == patient.PsychologistId 
+                            && a.Status != AppointmentStatus.Canceled
                             && a.Start >= queryDate 
                             && a.Start < nextDay)
                 .OrderBy(a => a.Start)
@@ -95,7 +96,8 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                         && a.Start < endUtcExclusive
                         && (a.Status == AppointmentStatus.Requested
                             || a.Status == AppointmentStatus.Confirmed
-                            || a.Status == AppointmentStatus.Canceled))
+                            || a.Status == AppointmentStatus.Canceled
+                            || a.Status == AppointmentStatus.Completed))
             .ToListAsync();
 
         var result = appointments
@@ -126,6 +128,14 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             {
                 var start = date.Add(time).AddMinutes(dto.OffsetMinutes);
                 var end = start.AddMinutes(dto.DurationMinutes);
+
+                var isHoliday = await context.Holidays.AnyAsync(h =>
+                    h.PsychologistId == psychologist.Id && h.Date.Date == start.Date);
+
+                if (isHoliday)
+                {
+                    continue;
+                }
 
                 var exists = await context.Appointments.AnyAsync(a => 
                     a.PsychologistId == psychologist.Id &&
@@ -163,12 +173,115 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         if (slot.PsychologistId != patient.PsychologistId) return BadRequest("This slot does not belong to your psychologist.");
         if (slot.Status != AppointmentStatus.Available) return BadRequest("Slot is not available.");
 
+        var isHoliday = await context.Holidays.AnyAsync(h =>
+            h.PsychologistId == slot.PsychologistId && h.Date.Date == slot.Start.Date);
+        if (isHoliday) return BadRequest("Slot is in a holiday block.");
+
+        TherapyPackage? package = null;
+        if (!dto.IsExtraSession)
+        {
+            package = await ResolveAndValidatePackage(patient.Id, dto.TherapyPackageId, slot.Start);
+            if (package == null)
+                return BadRequest("No valid active package found for this booking.");
+        }
+
         slot.Status = AppointmentStatus.Requested;
         slot.PatientId = patient.Id;
         slot.Reason = dto.Reason;
+        slot.IsExtraSession = dto.IsExtraSession;
+        slot.TherapyPackageId = package?.Id;
+        slot.ReservedAt = DateTime.UtcNow;
+
+        if (package != null && package.SessionConsumptionPolicy == SessionConsumptionPolicy.OnBooking)
+        {
+            if (!TryConsumePackageSession(package, slot.Start, slot.ReservedAt.Value))
+                return BadRequest("Package has no available sessions to consume.");
+
+            slot.SessionConsumed = true;
+            slot.SessionConsumedAt = slot.ReservedAt;
+        }
 
         await context.SaveChangesAsync();
         return Ok(MapToDto(slot));
+    }
+
+    [HttpPost("prebook-recurring")]
+    [Authorize(Roles = "Patient")]
+    public async Task<ActionResult<PrebookRecurringResultDto>> PrebookRecurring(PrebookRecurringAppointmentsDto dto)
+    {
+        var userId = GetUserId();
+        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (patient == null) return BadRequest("Patient profile not found.");
+        if (patient.PsychologistId == null) return BadRequest("Patient has no linked psychologist.");
+
+        if (!TimeSpan.TryParse(dto.Time, out var time))
+            return BadRequest("Invalid time format. Use HH:mm.");
+
+        TherapyPackage? package = null;
+        if (!dto.IsExtraSession)
+        {
+            package = await ResolveAndValidatePackage(patient.Id, dto.TherapyPackageId, dto.StartDate);
+            if (package == null)
+                return BadRequest("No valid active package found for recurring pre-booking.");
+        }
+
+        var result = new PrebookRecurringResultDto();
+        var currentDate = dto.StartDate.Date;
+        var endDate = dto.EndDate.Date;
+
+        while (currentDate <= endDate)
+        {
+            if (!dto.Weekdays.Contains(currentDate.DayOfWeek))
+            {
+                currentDate = currentDate.AddDays(1);
+                continue;
+            }
+
+            var start = currentDate.Add(time).AddMinutes(dto.OffsetMinutes);
+            var end = start.AddMinutes(dto.DurationMinutes);
+
+            var isHoliday = await context.Holidays.AnyAsync(h =>
+                h.PsychologistId == patient.PsychologistId.Value && h.Date.Date == currentDate);
+            if (isHoliday)
+            {
+                result.SkippedDates.Add($"{currentDate:yyyy-MM-dd}: holiday");
+                currentDate = currentDate.AddDays(1);
+                continue;
+            }
+
+            var slot = await context.Appointments.FirstOrDefaultAsync(a =>
+                a.PsychologistId == patient.PsychologistId.Value &&
+                a.Start == start &&
+                a.End == end);
+
+            if (slot == null || slot.Status != AppointmentStatus.Available)
+            {
+                result.SkippedDates.Add($"{currentDate:yyyy-MM-dd}: unavailable slot");
+                currentDate = currentDate.AddDays(1);
+                continue;
+            }
+
+            if (package != null && !IsPackageReservationAllowed(package, start, DateTime.UtcNow))
+            {
+                result.SkippedDates.Add($"{currentDate:yyyy-MM-dd}: package expired for new reservation");
+                currentDate = currentDate.AddDays(1);
+                continue;
+            }
+
+            slot.Status = AppointmentStatus.Requested;
+            slot.PatientId = patient.Id;
+            slot.Reason = dto.Reason;
+            slot.TherapyPackageId = package?.Id;
+            slot.IsExtraSession = dto.IsExtraSession;
+            slot.ReservedAt = DateTime.UtcNow;
+            // Pre-booking reserves without immediate consumption.
+
+            result.ReservedAppointments.Add(MapToDto(slot));
+            currentDate = currentDate.AddDays(1);
+        }
+
+        await context.SaveChangesAsync();
+        return Ok(result);
     }
 
     [HttpGet("patient-available-slots")]
@@ -253,13 +366,36 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         if (targetSlot.Status != AppointmentStatus.Available)
             return BadRequest("Target slot is not available.");
 
+        var isHoliday = await context.Holidays.AnyAsync(h =>
+            h.PsychologistId == targetSlot.PsychologistId && h.Date.Date == targetSlot.Start.Date);
+        if (isHoliday) return BadRequest("Target slot is in a holiday block.");
+
+        if (currentAppointment.TherapyPackageId != null)
+        {
+            var package = await context.TherapyPackages.FirstOrDefaultAsync(tp => tp.Id == currentAppointment.TherapyPackageId);
+            if (package == null) return BadRequest("Linked package not found.");
+
+            if (!IsPackageReservationAllowed(package, targetSlot.Start, currentAppointment.ReservedAt))
+                return BadRequest("Package cannot reserve the target slot date.");
+        }
+
         targetSlot.PatientId = currentAppointment.PatientId;
         targetSlot.Reason = currentAppointment.Reason;
         targetSlot.Status = AppointmentStatus.Requested;
+        targetSlot.IsExtraSession = currentAppointment.IsExtraSession;
+        targetSlot.TherapyPackageId = currentAppointment.TherapyPackageId;
+        targetSlot.ReservedAt = currentAppointment.ReservedAt ?? DateTime.UtcNow;
+        targetSlot.SessionConsumed = currentAppointment.SessionConsumed;
+        targetSlot.SessionConsumedAt = currentAppointment.SessionConsumedAt;
 
         currentAppointment.PatientId = null;
         currentAppointment.Reason = null;
         currentAppointment.Status = AppointmentStatus.Available;
+        currentAppointment.IsExtraSession = false;
+        currentAppointment.TherapyPackageId = null;
+        currentAppointment.ReservedAt = null;
+        currentAppointment.SessionConsumed = false;
+        currentAppointment.SessionConsumedAt = null;
 
         await context.SaveChangesAsync();
         return Ok(MapToDto(targetSlot));
@@ -298,23 +434,63 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                         Status = AppointmentStatus.Available
                     };
 
+                    if (appointment.SessionConsumed && appointment.TherapyPackageId != null)
+                    {
+                        var package = await context.TherapyPackages.FirstOrDefaultAsync(tp => tp.Id == appointment.TherapyPackageId);
+                        if (package != null && package.UsedSessions > 0)
+                        {
+                            package.UsedSessions -= 1;
+                        }
+                    }
+
                     appointment.Status = AppointmentStatus.Canceled;
                     context.Appointments.Add(availableClone);
                 }
                 else
                 {
+                    if (appointment.SessionConsumed && appointment.TherapyPackageId != null)
+                    {
+                        var package = await context.TherapyPackages.FirstOrDefaultAsync(tp => tp.Id == appointment.TherapyPackageId);
+                        if (package != null && package.UsedSessions > 0)
+                        {
+                            package.UsedSessions -= 1;
+                        }
+                    }
+
                     appointment.Status = AppointmentStatus.Available;
                     appointment.PatientId = null;
                     appointment.Reason = null;
+                    appointment.IsExtraSession = false;
+                    appointment.TherapyPackageId = null;
+                    appointment.ReservedAt = null;
+                    appointment.SessionConsumed = false;
+                    appointment.SessionConsumedAt = null;
                 }
             }
             else if (dto.Status == AppointmentStatus.Confirmed)
             {
-                 appointment.Status = AppointmentStatus.Confirmed;
+                appointment.Status = AppointmentStatus.Confirmed;
+                await ConsumeIfRequiredByPolicy(appointment, SessionConsumptionPolicy.OnAttendanceConfirmation);
+            }
+            else if (dto.Status == AppointmentStatus.Completed)
+            {
+                appointment.Status = AppointmentStatus.Completed;
+                await ConsumeIfRequiredByPolicy(appointment, SessionConsumptionPolicy.OnCompletion);
             }
             else if (dto.Status == AppointmentStatus.Canceled)
             {
+                if (appointment.SessionConsumed && appointment.TherapyPackageId != null)
+                {
+                    var package = await context.TherapyPackages.FirstOrDefaultAsync(tp => tp.Id == appointment.TherapyPackageId);
+                    if (package != null && package.UsedSessions > 0)
+                    {
+                        package.UsedSessions -= 1;
+                    }
+                }
+
                 appointment.Status = AppointmentStatus.Canceled;
+                appointment.SessionConsumed = false;
+                appointment.SessionConsumedAt = null;
             }
              else if (dto.NewStart.HasValue && dto.NewEnd.HasValue)
             {
@@ -336,9 +512,23 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             }
              else if (dto.Status == AppointmentStatus.Available) // Cancel
             {
+                if (appointment.SessionConsumed && appointment.TherapyPackageId != null)
+                {
+                    var package = await context.TherapyPackages.FirstOrDefaultAsync(tp => tp.Id == appointment.TherapyPackageId);
+                    if (package != null && package.UsedSessions > 0)
+                    {
+                        package.UsedSessions -= 1;
+                    }
+                }
+
                 appointment.Status = AppointmentStatus.Available;
                 appointment.PatientId = null;
                 appointment.Reason = null;
+                appointment.IsExtraSession = false;
+                appointment.TherapyPackageId = null;
+                appointment.ReservedAt = null;
+                appointment.SessionConsumed = false;
+                appointment.SessionConsumedAt = null;
             }
         }
 
@@ -424,10 +614,20 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             targetSlot.PatientId = appointment.PatientId;
             targetSlot.Reason = appointment.Reason;
             targetSlot.Status = AppointmentStatus.Confirmed;
+            targetSlot.IsExtraSession = appointment.IsExtraSession;
+            targetSlot.TherapyPackageId = appointment.TherapyPackageId;
+            targetSlot.ReservedAt = appointment.ReservedAt;
+            targetSlot.SessionConsumed = appointment.SessionConsumed;
+            targetSlot.SessionConsumedAt = appointment.SessionConsumedAt;
 
             appointment.PatientId = null;
             appointment.Reason = null;
             appointment.Status = AppointmentStatus.Available;
+            appointment.IsExtraSession = false;
+            appointment.TherapyPackageId = null;
+            appointment.ReservedAt = null;
+            appointment.SessionConsumed = false;
+            appointment.SessionConsumedAt = null;
 
             await context.SaveChangesAsync();
             return Ok(MapToDto(targetSlot));
@@ -453,12 +653,22 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             Start = dto.NewStart,
             End = dto.NewEnd,
             Status = AppointmentStatus.Confirmed,
-            Reason = appointment.Reason
+            Reason = appointment.Reason,
+            IsExtraSession = appointment.IsExtraSession,
+            TherapyPackageId = appointment.TherapyPackageId,
+            ReservedAt = appointment.ReservedAt,
+            SessionConsumed = appointment.SessionConsumed,
+            SessionConsumedAt = appointment.SessionConsumedAt
         };
 
         appointment.PatientId = null;
         appointment.Reason = null;
         appointment.Status = AppointmentStatus.Available;
+        appointment.IsExtraSession = false;
+        appointment.TherapyPackageId = null;
+        appointment.ReservedAt = null;
+        appointment.SessionConsumed = false;
+        appointment.SessionConsumedAt = null;
 
         context.Appointments.Add(newAppointment);
 
@@ -477,12 +687,84 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             Start = a.Start,
             End = a.End,
             Status = a.Status,
-            Reason = a.Reason
+            Reason = a.Reason,
+            TherapyPackageId = a.TherapyPackageId,
+            IsExtraSession = a.IsExtraSession,
+            SessionConsumed = a.SessionConsumed
         };
+    }
+
+    private async Task<TherapyPackage?> ResolveAndValidatePackage(Guid patientId, Guid? therapyPackageId, DateTime slotStart)
+    {
+        var packageQuery = context.TherapyPackages.Where(tp => tp.PatientId == patientId);
+
+        if (therapyPackageId.HasValue)
+        {
+            packageQuery = packageQuery.Where(tp => tp.Id == therapyPackageId.Value);
+        }
+        else
+        {
+            packageQuery = packageQuery.OrderByDescending(tp => tp.StartDate);
+        }
+
+        var package = await packageQuery.FirstOrDefaultAsync();
+        if (package == null) return null;
+
+        if (!IsPackageReservationAllowed(package, slotStart, DateTime.UtcNow))
+            return null;
+
+        return package;
+    }
+
+    private static bool IsPackageReservationAllowed(TherapyPackage package, DateTime slotStart, DateTime? reservedAt)
+    {
+        if (package.Status is TherapyPackageStatus.Canceled or TherapyPackageStatus.Paused)
+            return false;
+
+        var inRange = slotStart.Date >= package.StartDate.Date && slotStart.Date <= package.EndDate.Date;
+        if (inRange) return true;
+
+        if (slotStart.Date > package.EndDate.Date && reservedAt.HasValue)
+        {
+            return reservedAt.Value.Date <= package.EndDate.Date;
+        }
+
+        return false;
+    }
+
+    private static bool TryConsumePackageSession(TherapyPackage package, DateTime slotStart, DateTime consumedAt)
+    {
+        if (!IsPackageReservationAllowed(package, slotStart, consumedAt))
+            return false;
+
+        if (package.UsedSessions >= package.TotalSessions)
+            return false;
+
+        package.UsedSessions += 1;
+        return true;
+    }
+
+    private async Task ConsumeIfRequiredByPolicy(Appointment appointment, SessionConsumptionPolicy eventPolicy)
+    {
+        if (appointment.IsExtraSession || appointment.SessionConsumed || appointment.TherapyPackageId == null)
+            return;
+
+        var package = await context.TherapyPackages.FirstOrDefaultAsync(tp => tp.Id == appointment.TherapyPackageId.Value);
+        if (package == null) return;
+
+        if (package.SessionConsumptionPolicy != eventPolicy)
+            return;
+
+        if (TryConsumePackageSession(package, appointment.Start, DateTime.UtcNow))
+        {
+            appointment.SessionConsumed = true;
+            appointment.SessionConsumedAt = DateTime.UtcNow;
+        }
     }
 
     private static AppointmentStatus SelectHighestPriorityStatus(IEnumerable<AppointmentStatus> statuses)
     {
+        if (statuses.Contains(AppointmentStatus.Completed)) return AppointmentStatus.Completed;
         if (statuses.Contains(AppointmentStatus.Confirmed)) return AppointmentStatus.Confirmed;
         if (statuses.Contains(AppointmentStatus.Requested)) return AppointmentStatus.Requested;
         return AppointmentStatus.Canceled;
