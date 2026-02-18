@@ -10,6 +10,7 @@ public enum AppointmentStatus
     Requested = 1,
     Confirmed = 2,
     Canceled = 3,
+    Completed = 4
     FinancialPending = 4
 }
 
@@ -24,6 +25,11 @@ public class Appointment
     public Guid? PatientId { get; set; }
 
     [ForeignKey("PatientId")] [JsonIgnore] public Patient? Patient { get; set; }
+
+    public Guid? TherapyPackageId { get; set; }
+
+    [ForeignKey("TherapyPackageId")] [JsonIgnore]
+    public TherapyPackage? TherapyPackage { get; set; }
 
     public DateTime Start { get; set; }
 
@@ -42,6 +48,14 @@ public class Appointment
     public DateTime? BillingDecisionAt { get; set; }
 
     public string? Reason { get; set; }
+
+    public bool IsExtraSession { get; set; }
+
+    public bool SessionConsumed { get; set; }
+
+    public DateTime? SessionConsumedAt { get; set; }
+
+    public DateTime? ReservedAt { get; set; }
 
     public DateTime? ChargeFailedAtUtc { get; set; }
 

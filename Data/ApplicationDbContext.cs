@@ -13,6 +13,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<QuestionnaireTemplate> QuestionnaireTemplates { get; set; }
     public DbSet<QuestionnaireResponse> QuestionnaireResponses { get; set; }
     public DbSet<Appointment> Appointments { get; set; }
+    public DbSet<TherapyPackage> TherapyPackages { get; set; }
+    public DbSet<Holiday> Holidays { get; set; }
     public DbSet<TherapistPayoutAccount> TherapistPayoutAccounts { get; set; }
     public DbSet<TherapistPayoutPolicy> TherapistPayoutPolicies { get; set; }
     public DbSet<TherapistLedgerTransaction> TherapistLedgerTransactions { get; set; }
@@ -114,6 +116,22 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(a => a.PatientId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Appointment>()
+            .HasOne(a => a.TherapyPackage)
+            .WithMany(tp => tp.Appointments)
+            .HasForeignKey(a => a.TherapyPackageId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<TherapyPackage>()
+            .HasOne(tp => tp.Patient)
+            .WithMany()
+            .HasForeignKey(tp => tp.PatientId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Holiday>()
+            .HasIndex(h => new { h.PsychologistId, h.Date })
+            .IsUnique();
 
         modelBuilder.Entity<TherapistPayoutAccount>()
             .HasIndex(a => a.PsychologistId)
