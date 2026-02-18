@@ -12,7 +12,15 @@ public class AppointmentDto
     public DateTime End { get; set; }
     public AppointmentStatus Status { get; set; }
     public string? Reason { get; set; }
+    public DateTime? ChargeFailedAtUtc { get; set; }
+    public DateTime? FinancialRegularizationDeadlineUtc { get; set; }
+    public int ChargeRetryAttemptCount { get; set; }
+    public DateTime? NextChargeRetryAtUtc { get; set; }
+    public string? LastChargeFailureReason { get; set; }
+    public string? PaymentProvider { get; set; }
+    public string? PaymentMethodLastFourDigits { get; set; }
 }
+
 
 public class CreateSlotsDto
 {
@@ -27,6 +35,7 @@ public class BookAppointmentDto
     public Guid SlotId { get; set; }
     public string? Reason { get; set; }
 }
+
 
 public class UpdateAppointmentStatusDto
 {
@@ -56,4 +65,33 @@ public class PatientDayStatusDto
 public class PatientRescheduleDto
 {
     public Guid TargetSlotId { get; set; }
+}
+
+public class MarkChargeFailedDto
+{
+    public string? FailureReason { get; set; }
+    public DateTime? ChargeFailedAtUtc { get; set; }
+}
+
+public class UpdatePaymentMethodDto
+{
+    public string Provider { get; set; } = "MercadoPago";
+    public string MethodReference { get; set; } = string.Empty;
+    public string? LastFourDigits { get; set; }
+}
+
+public class FinancialPendingStatusDto
+{
+    public Guid AppointmentId { get; set; }
+    public DateTime? ChargeFailedAtUtc { get; set; }
+    public DateTime? FinancialRegularizationDeadlineUtc { get; set; }
+    public int ChargeRetryAttemptCount { get; set; }
+    public DateTime? NextChargeRetryAtUtc { get; set; }
+    public bool RetryLimitReached { get; set; }
+    public int MaxAttempts { get; set; }
+    public bool BlocksNextScheduling { get; set; }
+    public string? LastChargeFailureReason { get; set; }
+    public string? PaymentProvider { get; set; }
+    public string? PaymentMethodLastFourDigits { get; set; }
+    public string PatientNotificationMessage { get; set; } = string.Empty;
 }
