@@ -13,6 +13,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<QuestionnaireTemplate> QuestionnaireTemplates { get; set; }
     public DbSet<QuestionnaireResponse> QuestionnaireResponses { get; set; }
     public DbSet<Appointment> Appointments { get; set; }
+    public DbSet<TherapistPayoutAccount> TherapistPayoutAccounts { get; set; }
+    public DbSet<TherapistPayoutPolicy> TherapistPayoutPolicies { get; set; }
+    public DbSet<TherapistLedgerTransaction> TherapistLedgerTransactions { get; set; }
     public DbSet<TherapistTerms> TherapistTerms { get; set; }
     public DbSet<PatientTermsAcceptance> PatientTermsAcceptances { get; set; }
     public DbSet<FinancialLedgerEvent> FinancialLedgerEvents { get; set; }
@@ -112,6 +115,38 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(a => a.PatientId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        modelBuilder.Entity<TherapistPayoutAccount>()
+            .HasIndex(a => a.PsychologistId)
+            .IsUnique();
+
+        modelBuilder.Entity<TherapistPayoutAccount>()
+            .HasOne(a => a.Psychologist)
+            .WithMany()
+            .HasForeignKey(a => a.PsychologistId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TherapistPayoutPolicy>()
+            .HasIndex(p => p.PsychologistId)
+            .IsUnique();
+
+        modelBuilder.Entity<TherapistPayoutPolicy>()
+            .HasOne(p => p.Psychologist)
+            .WithMany()
+            .HasForeignKey(p => p.PsychologistId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TherapistLedgerTransaction>()
+            .HasIndex(t => t.PsychologistId);
+
+        modelBuilder.Entity<TherapistLedgerTransaction>()
+            .HasIndex(t => t.MercadoPagoTransactionId)
+            .IsUnique();
+
+        modelBuilder.Entity<TherapistLedgerTransaction>()
+            .HasOne(t => t.Psychologist)
+            .WithMany()
+            .HasForeignKey(t => t.PsychologistId)
+            .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<TherapistTerms>()
             .HasOne(t => t.Therapist)
             .WithMany()
