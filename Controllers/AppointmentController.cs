@@ -153,6 +153,42 @@ public class AppointmentController(
         return Ok("Slots generated.");
     }
 
+    [HttpGet("current-terms")]
+    [Authorize(Roles = "Patient")]
+    public async Task<ActionResult<CurrentTermsDto>> GetCurrentTerms([FromQuery] Guid slotId)
+    {
+        var userId = GetUserId();
+        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (patient == null) return BadRequest("Patient profile not found.");
+
+        var slot = await context.Appointments.FirstOrDefaultAsync(a => a.Id == slotId);
+        if (slot == null) return NotFound("Slot not found.");
+
+        if (slot.PsychologistId != patient.PsychologistId)
+            return BadRequest("This slot does not belong to your psychologist.");
+
+        var activeTerms = await context.TherapistTerms
+            .Where(t => t.TherapistId == slot.PsychologistId && t.Active && t.EffectiveFrom <= DateTime.UtcNow)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync();
+
+        if (activeTerms == null)
+            return NotFound("No active terms found for this therapist.");
+
+        var alreadyAccepted = await context.PatientTermsAcceptances
+            .AnyAsync(a => a.PatientId == patient.Id
+                           && a.TherapistId == slot.PsychologistId
+                           && a.TermsVersion == activeTerms.Version);
+
+        return Ok(new CurrentTermsDto
+        {
+            Version = activeTerms.Version,
+            Content = activeTerms.Content,
+            EffectiveFrom = activeTerms.EffectiveFrom,
+            AlreadyAccepted = alreadyAccepted
+        });
+    }
+
     [HttpPost("request")]
     [Authorize(Roles = "Patient")]
     public async Task<IActionResult> RequestAppointment(BookAppointmentDto dto)
@@ -166,6 +202,45 @@ public class AppointmentController(
 
         if (slot.PsychologistId != patient.PsychologistId) return BadRequest("This slot does not belong to your psychologist.");
         if (slot.Status != AppointmentStatus.Available) return BadRequest("Slot is not available.");
+
+        var activeTerms = await context.TherapistTerms
+            .Where(t => t.TherapistId == slot.PsychologistId && t.Active && t.EffectiveFrom <= DateTime.UtcNow)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync();
+
+        if (activeTerms != null)
+        {
+            var alreadyAccepted = await context.PatientTermsAcceptances
+                .AnyAsync(a => a.PatientId == patient.Id
+                               && a.TherapistId == slot.PsychologistId
+                               && a.TermsVersion == activeTerms.Version);
+
+            if (!alreadyAccepted)
+            {
+                if (!dto.AcceptTerms)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Você precisa aceitar os termos vigentes para concluir o agendamento.",
+                        termsVersion = activeTerms.Version,
+                        termsContent = activeTerms.Content,
+                        effectiveFrom = activeTerms.EffectiveFrom
+                    });
+                }
+
+                context.PatientTermsAcceptances.Add(new PatientTermsAcceptance
+                {
+                    Id = Guid.NewGuid(),
+                    PatientId = patient.Id,
+                    TherapistId = slot.PsychologistId,
+                    TermsVersion = activeTerms.Version,
+                    AcceptedAt = DateTime.UtcNow,
+                    AppointmentId = slot.Id,
+                    Ip = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    Device = HttpContext.Request.Headers.UserAgent.ToString()
+                });
+            }
+        }
 
         slot.Status = AppointmentStatus.Requested;
         slot.SessionStatus = SessionStatus.Scheduled;

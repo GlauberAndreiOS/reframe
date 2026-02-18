@@ -30,6 +30,15 @@ public class BookAppointmentDto
 {
     public Guid SlotId { get; set; }
     public string? Reason { get; set; }
+    public bool AcceptTerms { get; set; }
+}
+
+public class CurrentTermsDto
+{
+    public int Version { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public DateTime EffectiveFrom { get; set; }
+    public bool AlreadyAccepted { get; set; }
 }
 
 public class UpdateAppointmentStatusDto

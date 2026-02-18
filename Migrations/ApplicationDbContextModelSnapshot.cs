@@ -129,6 +129,45 @@ namespace reframe.Migrations
                     b.ToTable("AutomaticThoughts");
                 });
 
+
+            modelBuilder.Entity("reframe.Models.PatientTermsAcceptance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("AppointmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Device")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Ip")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TherapistId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TermsVersion")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.HasIndex("PatientId", "TherapistId", "TermsVersion");
+
+                    b.HasIndex("TherapistId");
+
+                    b.ToTable("PatientTermsAcceptances");
+                });
+
             modelBuilder.Entity("reframe.Models.Patient", b =>
                 {
                     b.Property<Guid>("Id")
@@ -303,6 +342,40 @@ namespace reframe.Migrations
                     b.ToTable("QuestionnaireTemplates");
                 });
 
+
+            modelBuilder.Entity("reframe.Models.TherapistTerms", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TherapistId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TherapistId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("TherapistTerms");
+                });
+
             modelBuilder.Entity("reframe.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -400,6 +473,34 @@ namespace reframe.Migrations
                     b.Navigation("Patient");
                 });
 
+
+            modelBuilder.Entity("reframe.Models.PatientTermsAcceptance", b =>
+                {
+                    b.HasOne("reframe.Models.Appointment", "Appointment")
+                        .WithMany()
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("reframe.Models.Patient", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("reframe.Models.Psychologist", "Therapist")
+                        .WithMany()
+                        .HasForeignKey("TherapistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Appointment");
+
+                    b.Navigation("Patient");
+
+                    b.Navigation("Therapist");
+                });
+
             modelBuilder.Entity("reframe.Models.Patient", b =>
                 {
                     b.HasOne("reframe.Models.Psychologist", "PendingPsychologist")
@@ -481,6 +582,18 @@ namespace reframe.Migrations
             modelBuilder.Entity("reframe.Models.Psychologist", b =>
                 {
                     b.Navigation("Patients");
+                });
+
+
+            modelBuilder.Entity("reframe.Models.TherapistTerms", b =>
+                {
+                    b.HasOne("reframe.Models.Psychologist", "Therapist")
+                        .WithMany()
+                        .HasForeignKey("TherapistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Therapist");
                 });
 
             modelBuilder.Entity("reframe.Models.User", b =>

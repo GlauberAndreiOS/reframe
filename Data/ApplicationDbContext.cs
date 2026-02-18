@@ -13,6 +13,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<QuestionnaireTemplate> QuestionnaireTemplates { get; set; }
     public DbSet<QuestionnaireResponse> QuestionnaireResponses { get; set; }
     public DbSet<Appointment> Appointments { get; set; }
+    public DbSet<TherapistTerms> TherapistTerms { get; set; }
+    public DbSet<PatientTermsAcceptance> PatientTermsAcceptances { get; set; }
     public DbSet<FinancialLedgerEvent> FinancialLedgerEvents { get; set; }
     public DbSet<FinancialLedgerCurrentBalance> FinancialLedgerCurrentBalances { get; set; }
 
@@ -110,6 +112,36 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(a => a.PatientId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        modelBuilder.Entity<TherapistTerms>()
+            .HasOne(t => t.Therapist)
+            .WithMany()
+            .HasForeignKey(t => t.TherapistId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TherapistTerms>()
+            .HasIndex(t => new { t.TherapistId, t.Version })
+            .IsUnique();
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasOne(a => a.Patient)
+            .WithMany()
+            .HasForeignKey(a => a.PatientId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasOne(a => a.Therapist)
+            .WithMany()
+            .HasForeignKey(a => a.TherapistId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasOne(a => a.Appointment)
+            .WithMany()
+            .HasForeignKey(a => a.AppointmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasIndex(a => new { a.PatientId, a.TherapistId, a.TermsVersion });
         var financialLedgerBuilder = modelBuilder.Entity<FinancialLedgerEvent>();
 
         financialLedgerBuilder
