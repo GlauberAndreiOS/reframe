@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using reframe.Models;
+using reframe.Services;
 
 namespace reframe.Data;
 
@@ -13,10 +15,20 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<QuestionnaireTemplate> QuestionnaireTemplates { get; set; }
     public DbSet<QuestionnaireResponse> QuestionnaireResponses { get; set; }
     public DbSet<Appointment> Appointments { get; set; }
+    public DbSet<AuditLog> AuditLogs { get; set; }
+    public DbSet<BillingPolicy> BillingPolicies { get; set; }
+    public DbSet<TermsOfServiceVersion> TermsOfServiceVersions { get; set; }
+    public DbSet<PsychologistPayoutAccount> PsychologistPayoutAccounts { get; set; }
+    public DbSet<PaymentMethodToken> PaymentMethodTokens { get; set; }
+    public DbSet<FinancialRecord> FinancialRecords { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        var encryptedStringConverter = new ValueConverter<string?, string?>(
+            v => FieldEncryption.Encrypt(v),
+            v => FieldEncryption.Decrypt(v));
 
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Username)
@@ -26,9 +38,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasIndex(p => p.CRP)
             .IsUnique();
 
-        modelBuilder.Entity<User>()
-            .HasOne(u => u.PsychologistProfile)
-            .WithOne(p => p.User)
+        modelBuilder.Entity<User>().Property(u => u.Cpf).HasConversion(encryptedStringConverter);
+        modelBuilder.Entity<User>().Property(u => u.Street).HasConversion(encryptedStringConverter);
+        modelBuilder.Entity<User>().Property(u => u.AddressNumber).HasConversion(encryptedStringConverter);
+        modelBuilder.Entity<User>().Property(u => u.AddressComplement).HasConversion(encryptedStringConverter);
+        modelBuilder.Entity<User>().Property(u => u.Neighborhood).HasConversion(encryptedStringConverter);
+        modelBuilder.Entity<User>().Property(u => u.City).HasConversion(encryptedStringConverter);
+        modelBuilder.Entity<User>().Property(u => u.State).HasConversion(encryptedStringConverter);
+        modelBuilder.Entity<User>().Property(u => u.ZipCode).HasConversion(encryptedStringConverter);
+
+        modelBuilder.Entity<Psychologist>()
+            .HasOne(u => u.User)
+            .WithOne(p => p.PsychologistProfile)
             .HasForeignKey<Psychologist>(p => p.UserId)
             .OnDelete(DeleteBehavior.Restrict);
 
@@ -71,7 +92,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<Questionnaire>()
             .Property(q => q.Questions)
             .HasColumnType("jsonb");
-            
+
         modelBuilder.Entity<QuestionnaireTemplate>()
             .Property(qt => qt.Questions)
             .HasColumnType("jsonb");
@@ -107,5 +128,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(a => a.PatientId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<AuditLog>()
+            .HasIndex(a => a.OccurredAt);
+
+        modelBuilder.Entity<FinancialRecord>()
+            .HasIndex(f => new { f.UserId, f.LegalRetentionUntil });
     }
 }

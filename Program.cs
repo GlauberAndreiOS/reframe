@@ -118,6 +118,9 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 #region Services
 
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<ILgpdService, LgpdService>();
+builder.Services.AddScoped<IPaymentGatewayTokenizationService, PaymentGatewayTokenizationService>();
 
 #endregion
 
@@ -209,6 +212,11 @@ if (cliCommand is "seed" or "reset-db" or "force-seed")
 #region WEB MODE
 
 if (app.Environment.IsDevelopment()) app.MapOpenApi("/openapi/v1.json");
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+app.UseHttpsRedirection();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
