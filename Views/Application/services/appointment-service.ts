@@ -15,6 +15,14 @@ export interface Appointment {
 interface AppointmentRequest {
 	slotId: string;
 	reason?: string;
+	acceptTerms?: boolean;
+}
+
+export interface CurrentTerms {
+	version: number;
+	content: string;
+	effectiveFrom: string;
+	alreadyAccepted: boolean;
 }
 
 interface StatusUpdate {
@@ -61,6 +69,7 @@ const API_ENDPOINTS = {
 	GET_PATIENT_DAY_STATUSES: '/Appointment/patient-day-statuses',
 	GET_PATIENT_AVAILABLE_SLOTS: '/Appointment/patient-available-slots',
 	PATIENT_RESCHEDULE: '/Appointment/:id/patient-reschedule',
+	GET_CURRENT_TERMS: '/Appointment/current-terms',
 } as const;
 
 const SLOT_DEFAULTS = {
@@ -109,8 +118,8 @@ export const appointmentService = {
 	/**
 	 * Request an appointment slot
 	 */
-	requestAppointment: (slotId: string, reason?: string): Promise<any> => {
-		const payload: AppointmentRequest = {slotId, reason};
+	requestAppointment: (slotId: string, reason?: string, acceptTerms?: boolean): Promise<any> => {
+		const payload: AppointmentRequest = {slotId, reason, acceptTerms};
 
 		return api.post(API_ENDPOINTS.REQUEST_APPOINTMENT, payload)
 			.then((response) => response.data)
@@ -198,6 +207,18 @@ export const appointmentService = {
 			.then((response) => response.data)
 			.catch((error) => {
 				console.error('Error rescheduling appointment:', error);
+				throw error;
+			});
+	},
+
+
+	getCurrentTerms: (slotId: string): Promise<CurrentTerms> => {
+		return api.get(API_ENDPOINTS.GET_CURRENT_TERMS, {
+			params: {slotId},
+		})
+			.then((response) => response.data)
+			.catch((error) => {
+				console.error('Error fetching current terms:', error);
 				throw error;
 			});
 	},
