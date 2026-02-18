@@ -18,5 +18,9 @@ public class Psychologist
     public string? Specialty { get; set; }
     public string? PresentationText { get; set; }
 
+    public ChargeTiming BillingChargeTiming { get; set; } = ChargeTiming.AfterSession;
+
+    public int FreeCancellationWindowHours { get; set; } = 24;
+
     public ICollection<Patient> Patients { get; set; } = new List<Patient>();
 }

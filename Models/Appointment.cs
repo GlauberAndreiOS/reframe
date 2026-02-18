@@ -11,6 +11,7 @@ public enum AppointmentStatus
     Confirmed = 2,
     Canceled = 3,
     Completed = 4
+    FinancialPending = 4
 }
 
 public class Appointment
@@ -36,6 +37,16 @@ public class Appointment
 
     public AppointmentStatus Status { get; set; } = AppointmentStatus.Available;
 
+    public SessionStatus SessionStatus { get; set; } = SessionStatus.Scheduled;
+
+    public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
+
+    public ChargeDecision? ChargeDecision { get; set; }
+
+    public string? DecisionReason { get; set; }
+
+    public DateTime? BillingDecisionAt { get; set; }
+
     public string? Reason { get; set; }
 
     public bool IsExtraSession { get; set; }
@@ -46,5 +57,21 @@ public class Appointment
 
     public DateTime? ReservedAt { get; set; }
 
+    public DateTime? ChargeFailedAtUtc { get; set; }
+
+    public DateTime? FinancialRegularizationDeadlineUtc { get; set; }
+
+    public int ChargeRetryAttemptCount { get; set; }
+
+    public DateTime? NextChargeRetryAtUtc { get; set; }
+
+    public string? LastChargeFailureReason { get; set; }
+
+    public string? PaymentProvider { get; set; }
+
+    public string? PaymentMethodReference { get; set; }
+
+    public string? PaymentMethodLastFourDigits { get; set; }
+    
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

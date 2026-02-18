@@ -5,14 +5,27 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using reframe.Data;
 using reframe.Models;
+using reframe.Services;
 
 namespace reframe.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class AppointmentController(ApplicationDbContext context) : ControllerBase
+public class AppointmentController(
+    ApplicationDbContext context,
+    ISessionBillingDecisionService billingDecisionService) : ControllerBase
 {
+    private static readonly TimeSpan[] ChargeRetryDelays =
+    {
+        TimeSpan.FromHours(1),
+        TimeSpan.FromHours(24),
+        TimeSpan.FromHours(72)
+    };
+
+    private const int MaxChargeRetryAttempts = 3;
+    private static readonly TimeSpan FinancialRegularizationWindow = TimeSpan.FromHours(72);
+
     private Guid GetUserId() => Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
 
     [HttpGet("slots")]
@@ -98,6 +111,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                             || a.Status == AppointmentStatus.Confirmed
                             || a.Status == AppointmentStatus.Canceled
                             || a.Status == AppointmentStatus.Completed))
+                            || a.Status == AppointmentStatus.FinancialPending))
             .ToListAsync();
 
         var result = appointments
@@ -149,7 +163,8 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                         PsychologistId = psychologist.Id,
                         Start = start,
                         End = end,
-                        Status = AppointmentStatus.Available
+                        Status = AppointmentStatus.Available,
+                        SessionStatus = SessionStatus.Scheduled
                     });
                 }
             }
@@ -157,6 +172,42 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
 
         await context.SaveChangesAsync();
         return Ok("Slots generated.");
+    }
+
+    [HttpGet("current-terms")]
+    [Authorize(Roles = "Patient")]
+    public async Task<ActionResult<CurrentTermsDto>> GetCurrentTerms([FromQuery] Guid slotId)
+    {
+        var userId = GetUserId();
+        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (patient == null) return BadRequest("Patient profile not found.");
+
+        var slot = await context.Appointments.FirstOrDefaultAsync(a => a.Id == slotId);
+        if (slot == null) return NotFound("Slot not found.");
+
+        if (slot.PsychologistId != patient.PsychologistId)
+            return BadRequest("This slot does not belong to your psychologist.");
+
+        var activeTerms = await context.TherapistTerms
+            .Where(t => t.TherapistId == slot.PsychologistId && t.Active && t.EffectiveFrom <= DateTime.UtcNow)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync();
+
+        if (activeTerms == null)
+            return NotFound("No active terms found for this therapist.");
+
+        var alreadyAccepted = await context.PatientTermsAcceptances
+            .AnyAsync(a => a.PatientId == patient.Id
+                           && a.TherapistId == slot.PsychologistId
+                           && a.TermsVersion == activeTerms.Version);
+
+        return Ok(new CurrentTermsDto
+        {
+            Version = activeTerms.Version,
+            Content = activeTerms.Content,
+            EffectiveFrom = activeTerms.EffectiveFrom,
+            AlreadyAccepted = alreadyAccepted
+        });
     }
 
     [HttpPost("request")]
@@ -169,6 +220,10 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
 
         var slot = await context.Appointments.FindAsync(dto.SlotId);
         if (slot == null) return NotFound("Slot not found.");
+
+        var hasBlockingFinancialPending = await HasBlockingFinancialPendingAsync(patient.Id);
+        if (hasBlockingFinancialPending)
+            return BadRequest("Você possui uma sessão com pendência financeira. Regularize o pagamento para realizar novos agendamentos.");
 
         if (slot.PsychologistId != patient.PsychologistId) return BadRequest("This slot does not belong to your psychologist.");
         if (slot.Status != AppointmentStatus.Available) return BadRequest("Slot is not available.");
@@ -183,9 +238,47 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             package = await ResolveAndValidatePackage(patient.Id, dto.TherapyPackageId, slot.Start);
             if (package == null)
                 return BadRequest("No valid active package found for this booking.");
+        var activeTerms = await context.TherapistTerms
+            .Where(t => t.TherapistId == slot.PsychologistId && t.Active && t.EffectiveFrom <= DateTime.UtcNow)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync();
+
+        if (activeTerms != null)
+        {
+            var alreadyAccepted = await context.PatientTermsAcceptances
+                .AnyAsync(a => a.PatientId == patient.Id
+                               && a.TherapistId == slot.PsychologistId
+                               && a.TermsVersion == activeTerms.Version);
+
+            if (!alreadyAccepted)
+            {
+                if (!dto.AcceptTerms)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Você precisa aceitar os termos vigentes para concluir o agendamento.",
+                        termsVersion = activeTerms.Version,
+                        termsContent = activeTerms.Content,
+                        effectiveFrom = activeTerms.EffectiveFrom
+                    });
+                }
+
+                context.PatientTermsAcceptances.Add(new PatientTermsAcceptance
+                {
+                    Id = Guid.NewGuid(),
+                    PatientId = patient.Id,
+                    TherapistId = slot.PsychologistId,
+                    TermsVersion = activeTerms.Version,
+                    AcceptedAt = DateTime.UtcNow,
+                    AppointmentId = slot.Id,
+                    Ip = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    Device = HttpContext.Request.Headers.UserAgent.ToString()
+                });
+            }
         }
 
         slot.Status = AppointmentStatus.Requested;
+        slot.SessionStatus = SessionStatus.Scheduled;
         slot.PatientId = patient.Id;
         slot.Reason = dto.Reason;
         slot.IsExtraSession = dto.IsExtraSession;
@@ -200,6 +293,8 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             slot.SessionConsumed = true;
             slot.SessionConsumedAt = slot.ReservedAt;
         }
+
+        await ApplyBillingDecisionAsync(slot);
 
         await context.SaveChangesAsync();
         return Ok(MapToDto(slot));
@@ -358,6 +453,10 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         if (currentAppointment.Status != AppointmentStatus.Confirmed)
             return BadRequest("Only confirmed appointments can be rescheduled.");
 
+        var hasBlockingFinancialPending = await HasBlockingFinancialPendingAsync(patient.Id, currentAppointment.Id);
+        if (hasBlockingFinancialPending)
+            return BadRequest("Você possui uma sessão com pendência financeira. Regularize o pagamento para reagendar.");
+
         var targetSlot = await context.Appointments.FirstOrDefaultAsync(a => a.Id == dto.TargetSlotId);
         if (targetSlot == null) return NotFound("Target slot not found.");
 
@@ -387,6 +486,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         targetSlot.ReservedAt = currentAppointment.ReservedAt ?? DateTime.UtcNow;
         targetSlot.SessionConsumed = currentAppointment.SessionConsumed;
         targetSlot.SessionConsumedAt = currentAppointment.SessionConsumedAt;
+        targetSlot.SessionStatus = SessionStatus.Scheduled;
 
         currentAppointment.PatientId = null;
         currentAppointment.Reason = null;
@@ -396,6 +496,9 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         currentAppointment.ReservedAt = null;
         currentAppointment.SessionConsumed = false;
         currentAppointment.SessionConsumedAt = null;
+        currentAppointment.SessionStatus = SessionStatus.Scheduled;
+
+        await ApplyBillingDecisionAsync(targetSlot);
 
         await context.SaveChangesAsync();
         return Ok(MapToDto(targetSlot));
@@ -444,6 +547,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                     }
 
                     appointment.Status = AppointmentStatus.Canceled;
+                    appointment.SessionStatus = SessionStatus.CanceledByTherapist;
                     context.Appointments.Add(availableClone);
                 }
                 else
@@ -458,6 +562,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                     }
 
                     appointment.Status = AppointmentStatus.Available;
+                    appointment.SessionStatus = SessionStatus.Scheduled;
                     appointment.PatientId = null;
                     appointment.Reason = null;
                     appointment.IsExtraSession = false;
@@ -471,11 +576,8 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             {
                 appointment.Status = AppointmentStatus.Confirmed;
                 await ConsumeIfRequiredByPolicy(appointment, SessionConsumptionPolicy.OnAttendanceConfirmation);
-            }
-            else if (dto.Status == AppointmentStatus.Completed)
-            {
                 appointment.Status = AppointmentStatus.Completed;
-                await ConsumeIfRequiredByPolicy(appointment, SessionConsumptionPolicy.OnCompletion);
+                appointment.SessionStatus = SessionStatus.Scheduled;
             }
             else if (dto.Status == AppointmentStatus.Canceled)
             {
@@ -491,12 +593,14 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                 appointment.Status = AppointmentStatus.Canceled;
                 appointment.SessionConsumed = false;
                 appointment.SessionConsumedAt = null;
+                appointment.SessionStatus = SessionStatus.CanceledByTherapist;
             }
              else if (dto.NewStart.HasValue && dto.NewEnd.HasValue)
             {
                 appointment.Start = dto.NewStart.Value;
                 appointment.End = dto.NewEnd.Value;
                 appointment.Status = AppointmentStatus.Requested;
+                appointment.SessionStatus = SessionStatus.Scheduled;
             }
             
         }
@@ -509,6 +613,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             if (dto.Status == AppointmentStatus.Confirmed && appointment.Status == AppointmentStatus.Requested)
             {
                appointment.Status = AppointmentStatus.Confirmed;
+               appointment.SessionStatus = SessionStatus.Scheduled;
             }
              else if (dto.Status == AppointmentStatus.Available) // Cancel
             {
@@ -522,6 +627,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                 }
 
                 appointment.Status = AppointmentStatus.Available;
+                appointment.SessionStatus = SessionStatus.CanceledByPatient;
                 appointment.PatientId = null;
                 appointment.Reason = null;
                 appointment.IsExtraSession = false;
@@ -531,6 +637,8 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
                 appointment.SessionConsumedAt = null;
             }
         }
+
+        await ApplyBillingDecisionAsync(appointment);
 
         await context.SaveChangesAsync();
         return Ok(MapToDto(appointment));
@@ -563,9 +671,110 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         appointment.PatientId = patient.Id;
         appointment.Patient = patient;
         appointment.Status = AppointmentStatus.Confirmed;
+        appointment.SessionStatus = SessionStatus.Scheduled;
+
+        await ApplyBillingDecisionAsync(appointment);
 
         await context.SaveChangesAsync();
         return Ok(MapToDto(appointment));
+    }
+
+    [HttpPost("{id}/charge-failed")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<ActionResult<FinancialPendingStatusDto>> MarkChargeFailed(Guid id, MarkChargeFailedDto dto)
+    {
+        var userId = GetUserId();
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (psychologist == null) return BadRequest("Psychologist profile not found.");
+
+        var appointment = await context.Appointments
+            .Include(a => a.Patient)
+            .ThenInclude(p => p!.User)
+            .FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+        if (appointment.PsychologistId != psychologist.Id) return Forbid();
+        if (appointment.PatientId == null) return BadRequest("Appointment has no patient linked.");
+
+        var failedAt = dto.ChargeFailedAtUtc ?? DateTime.UtcNow;
+        var nextAttempt = appointment.ChargeRetryAttemptCount < ChargeRetryDelays.Length
+            ? failedAt.Add(ChargeRetryDelays[appointment.ChargeRetryAttemptCount])
+            : null;
+
+        appointment.Status = AppointmentStatus.FinancialPending;
+        appointment.ChargeFailedAtUtc = failedAt;
+        appointment.FinancialRegularizationDeadlineUtc ??= failedAt.Add(FinancialRegularizationWindow);
+        appointment.ChargeRetryAttemptCount += 1;
+        appointment.NextChargeRetryAtUtc = nextAttempt;
+        appointment.LastChargeFailureReason = string.IsNullOrWhiteSpace(dto.FailureReason)
+            ? "charge_failed"
+            : dto.FailureReason.Trim();
+
+        await context.SaveChangesAsync();
+        return Ok(BuildFinancialPendingStatus(appointment));
+    }
+
+    [HttpPost("{id}/payment-method")]
+    [Authorize(Roles = "Patient")]
+    public async Task<ActionResult<FinancialPendingStatusDto>> UpdatePaymentMethod(Guid id, UpdatePaymentMethodDto dto)
+    {
+        var userId = GetUserId();
+        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (patient == null) return BadRequest("Patient profile not found.");
+
+        var appointment = await context.Appointments
+            .Include(a => a.Patient)
+            .ThenInclude(p => p!.User)
+            .FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+        if (appointment.PatientId != patient.Id) return Forbid();
+
+        if (string.IsNullOrWhiteSpace(dto.MethodReference))
+            return BadRequest("MethodReference is required.");
+
+        appointment.PaymentProvider = string.IsNullOrWhiteSpace(dto.Provider) ? "MercadoPago" : dto.Provider.Trim();
+        appointment.PaymentMethodReference = dto.MethodReference.Trim();
+        appointment.PaymentMethodLastFourDigits = string.IsNullOrWhiteSpace(dto.LastFourDigits)
+            ? null
+            : dto.LastFourDigits.Trim();
+
+        if (appointment.Status == AppointmentStatus.FinancialPending)
+        {
+            appointment.NextChargeRetryAtUtc = DateTime.UtcNow;
+        }
+
+        await context.SaveChangesAsync();
+        return Ok(BuildFinancialPendingStatus(appointment));
+    }
+
+    [HttpGet("{id}/financial-status")]
+    [Authorize]
+    public async Task<ActionResult<FinancialPendingStatusDto>> GetFinancialStatus(Guid id)
+    {
+        var userId = GetUserId();
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+
+        var appointment = await context.Appointments
+            .Include(a => a.Patient)
+            .ThenInclude(p => p!.User)
+            .FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+
+        if (userRole == "Psychologist")
+        {
+            var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (psychologist == null || appointment.PsychologistId != psychologist.Id) return Forbid();
+        }
+        else if (userRole == "Patient")
+        {
+            var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (patient == null || appointment.PatientId != patient.Id) return Forbid();
+        }
+        else
+        {
+            return Forbid();
+        }
+
+        return Ok(BuildFinancialPendingStatus(appointment));
     }
 
     [HttpDelete("{id}")]
@@ -619,6 +828,7 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             targetSlot.ReservedAt = appointment.ReservedAt;
             targetSlot.SessionConsumed = appointment.SessionConsumed;
             targetSlot.SessionConsumedAt = appointment.SessionConsumedAt;
+            targetSlot.SessionStatus = SessionStatus.Scheduled;
 
             appointment.PatientId = null;
             appointment.Reason = null;
@@ -628,6 +838,9 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             appointment.ReservedAt = null;
             appointment.SessionConsumed = false;
             appointment.SessionConsumedAt = null;
+            appointment.SessionStatus = SessionStatus.Scheduled;
+
+            await ApplyBillingDecisionAsync(targetSlot);
 
             await context.SaveChangesAsync();
             return Ok(MapToDto(targetSlot));
@@ -659,6 +872,8 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             ReservedAt = appointment.ReservedAt,
             SessionConsumed = appointment.SessionConsumed,
             SessionConsumedAt = appointment.SessionConsumedAt
+            SessionStatus = SessionStatus.Scheduled,
+            Reason = appointment.Reason
         };
 
         appointment.PatientId = null;
@@ -669,8 +884,11 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
         appointment.ReservedAt = null;
         appointment.SessionConsumed = false;
         appointment.SessionConsumedAt = null;
+        appointment.SessionStatus = SessionStatus.Scheduled;
 
         context.Appointments.Add(newAppointment);
+
+        await ApplyBillingDecisionAsync(newAppointment);
 
         await context.SaveChangesAsync();
         return Ok(MapToDto(newAppointment));
@@ -691,7 +909,52 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
             TherapyPackageId = a.TherapyPackageId,
             IsExtraSession = a.IsExtraSession,
             SessionConsumed = a.SessionConsumed
+            ChargeFailedAtUtc = a.ChargeFailedAtUtc,
+            FinancialRegularizationDeadlineUtc = a.FinancialRegularizationDeadlineUtc,
+            ChargeRetryAttemptCount = a.ChargeRetryAttemptCount,
+            NextChargeRetryAtUtc = a.NextChargeRetryAtUtc,
+            LastChargeFailureReason = a.LastChargeFailureReason,
+            PaymentProvider = a.PaymentProvider,
+            PaymentMethodLastFourDigits = a.PaymentMethodLastFourDigits
+            SessionStatus = a.SessionStatus,
+            PaymentStatus = a.PaymentStatus,
+            ChargeDecision = a.ChargeDecision,
+            DecisionReason = a.DecisionReason,
         };
+    }
+
+    private async Task ApplyBillingDecisionAsync(Appointment appointment)
+    {
+        var psychologist = appointment.Psychologist ??
+                           await context.Psychologists.FirstOrDefaultAsync(p => p.Id == appointment.PsychologistId);
+
+        var policy = psychologist is null
+            ? new PsychologistBillingPolicy()
+            : new PsychologistBillingPolicy
+            {
+                ChargeTiming = psychologist.BillingChargeTiming,
+                FreeCancellationWindowHours = psychologist.FreeCancellationWindowHours
+            };
+
+        var billingInput = new SessionBillingInput
+        {
+            SessionStartUtc = appointment.Start,
+            DecisionAtUtc = DateTime.UtcNow,
+            SessionStatus = appointment.SessionStatus,
+            Policy = policy,
+            Package = new SessionPackageContext
+            {
+                // TODO: replace with real package lookup when package model is available.
+                HasActivePackage = false,
+                RemainingSessions = 0
+            }
+        };
+
+        var decision = billingDecisionService.Decide(billingInput);
+        appointment.ChargeDecision = decision.Decision;
+        appointment.DecisionReason = decision.DecisionReason;
+        appointment.BillingDecisionAt = billingInput.DecisionAtUtc;
+        appointment.PaymentStatus = PaymentStatus.Pending;
     }
 
     private async Task<TherapyPackage?> ResolveAndValidatePackage(Guid patientId, Guid? therapyPackageId, DateTime slotStart)
@@ -765,9 +1028,54 @@ public class AppointmentController(ApplicationDbContext context) : ControllerBas
     private static AppointmentStatus SelectHighestPriorityStatus(IEnumerable<AppointmentStatus> statuses)
     {
         if (statuses.Contains(AppointmentStatus.Completed)) return AppointmentStatus.Completed;
+        if (statuses.Contains(AppointmentStatus.FinancialPending)) return AppointmentStatus.FinancialPending;
         if (statuses.Contains(AppointmentStatus.Confirmed)) return AppointmentStatus.Confirmed;
         if (statuses.Contains(AppointmentStatus.Requested)) return AppointmentStatus.Requested;
         return AppointmentStatus.Canceled;
+    }
+
+    private async Task<bool> HasBlockingFinancialPendingAsync(Guid patientId, Guid? ignoreAppointmentId = null)
+    {
+        var now = DateTime.UtcNow;
+
+        return await context.Appointments.AnyAsync(a =>
+            a.PatientId == patientId
+            && a.Status == AppointmentStatus.FinancialPending
+            && (ignoreAppointmentId == null || a.Id != ignoreAppointmentId)
+            && (
+                a.ChargeRetryAttemptCount >= MaxChargeRetryAttempts
+                || (a.FinancialRegularizationDeadlineUtc.HasValue && a.FinancialRegularizationDeadlineUtc.Value < now)
+            ));
+    }
+
+    private static FinancialPendingStatusDto BuildFinancialPendingStatus(Appointment appointment)
+    {
+        var retryLimitReached = appointment.ChargeRetryAttemptCount >= MaxChargeRetryAttempts;
+        var now = DateTime.UtcNow;
+        var deadlineExpired = appointment.FinancialRegularizationDeadlineUtc.HasValue
+            && appointment.FinancialRegularizationDeadlineUtc.Value < now;
+        var blocksNextScheduling = appointment.Status == AppointmentStatus.FinancialPending
+            && (retryLimitReached || deadlineExpired);
+
+        var patientName = appointment.Patient?.User?.Name ?? "Paciente";
+        var notificationMessage =
+            $"{patientName}, houve falha na cobrança da sessão. Atualize o método de pagamento para evitar impacto nos próximos agendamentos.";
+
+        return new FinancialPendingStatusDto
+        {
+            AppointmentId = appointment.Id,
+            ChargeFailedAtUtc = appointment.ChargeFailedAtUtc,
+            FinancialRegularizationDeadlineUtc = appointment.FinancialRegularizationDeadlineUtc,
+            ChargeRetryAttemptCount = appointment.ChargeRetryAttemptCount,
+            NextChargeRetryAtUtc = appointment.NextChargeRetryAtUtc,
+            RetryLimitReached = retryLimitReached,
+            MaxAttempts = MaxChargeRetryAttempts,
+            BlocksNextScheduling = blocksNextScheduling,
+            LastChargeFailureReason = appointment.LastChargeFailureReason,
+            PaymentProvider = appointment.PaymentProvider,
+            PaymentMethodLastFourDigits = appointment.PaymentMethodLastFourDigits,
+            PatientNotificationMessage = notificationMessage
+        };
     }
 
     private static DayOfWeek? ParseWeekday(string input)
