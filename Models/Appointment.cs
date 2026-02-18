@@ -9,7 +9,8 @@ public enum AppointmentStatus
     Available = 0,
     Requested = 1,
     Confirmed = 2,
-    Canceled = 3
+    Canceled = 3,
+    FinancialPending = 4
 }
 
 public class Appointment
@@ -41,6 +42,22 @@ public class Appointment
     public DateTime? BillingDecisionAt { get; set; }
 
     public string? Reason { get; set; }
+
+    public DateTime? ChargeFailedAtUtc { get; set; }
+
+    public DateTime? FinancialRegularizationDeadlineUtc { get; set; }
+
+    public int ChargeRetryAttemptCount { get; set; }
+
+    public DateTime? NextChargeRetryAtUtc { get; set; }
+
+    public string? LastChargeFailureReason { get; set; }
+
+    public string? PaymentProvider { get; set; }
+
+    public string? PaymentMethodReference { get; set; }
+
+    public string? PaymentMethodLastFourDigits { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

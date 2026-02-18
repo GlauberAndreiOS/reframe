@@ -30,6 +30,12 @@ namespace reframe.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("ChargeRetryAttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ChargeFailedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("BillingDecisionAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -45,8 +51,26 @@ namespace reframe.Migrations
                     b.Property<DateTime>("End")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("FinancialRegularizationDeadlineUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastChargeFailureReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("NextChargeRetryAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("PatientId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("PaymentMethodLastFourDigits")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentMethodReference")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentProvider")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("PsychologistId")
                         .HasColumnType("uuid");

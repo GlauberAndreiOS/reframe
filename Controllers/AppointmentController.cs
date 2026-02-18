@@ -16,6 +16,16 @@ public class AppointmentController(
     ApplicationDbContext context,
     ISessionBillingDecisionService billingDecisionService) : ControllerBase
 {
+    private static readonly TimeSpan[] ChargeRetryDelays =
+    {
+        TimeSpan.FromHours(1),
+        TimeSpan.FromHours(24),
+        TimeSpan.FromHours(72)
+    };
+
+    private const int MaxChargeRetryAttempts = 3;
+    private static readonly TimeSpan FinancialRegularizationWindow = TimeSpan.FromHours(72);
+
     private Guid GetUserId() => Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
 
     [HttpGet("slots")]
@@ -98,7 +108,8 @@ public class AppointmentController(
                         && a.Start < endUtcExclusive
                         && (a.Status == AppointmentStatus.Requested
                             || a.Status == AppointmentStatus.Confirmed
-                            || a.Status == AppointmentStatus.Canceled))
+                            || a.Status == AppointmentStatus.Canceled
+                            || a.Status == AppointmentStatus.FinancialPending))
             .ToListAsync();
 
         var result = appointments
@@ -199,6 +210,10 @@ public class AppointmentController(
 
         var slot = await context.Appointments.FindAsync(dto.SlotId);
         if (slot == null) return NotFound("Slot not found.");
+
+        var hasBlockingFinancialPending = await HasBlockingFinancialPendingAsync(patient.Id);
+        if (hasBlockingFinancialPending)
+            return BadRequest("Você possui uma sessão com pendência financeira. Regularize o pagamento para realizar novos agendamentos.");
 
         if (slot.PsychologistId != patient.PsychologistId) return BadRequest("This slot does not belong to your psychologist.");
         if (slot.Status != AppointmentStatus.Available) return BadRequest("Slot is not available.");
@@ -326,6 +341,10 @@ public class AppointmentController(
         if (currentAppointment.PatientId != patient.Id) return Forbid();
         if (currentAppointment.Status != AppointmentStatus.Confirmed)
             return BadRequest("Only confirmed appointments can be rescheduled.");
+
+        var hasBlockingFinancialPending = await HasBlockingFinancialPendingAsync(patient.Id, currentAppointment.Id);
+        if (hasBlockingFinancialPending)
+            return BadRequest("Você possui uma sessão com pendência financeira. Regularize o pagamento para reagendar.");
 
         var targetSlot = await context.Appointments.FirstOrDefaultAsync(a => a.Id == dto.TargetSlotId);
         if (targetSlot == null) return NotFound("Target slot not found.");
@@ -476,6 +495,104 @@ public class AppointmentController(
         return Ok(MapToDto(appointment));
     }
 
+    [HttpPost("{id}/charge-failed")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<ActionResult<FinancialPendingStatusDto>> MarkChargeFailed(Guid id, MarkChargeFailedDto dto)
+    {
+        var userId = GetUserId();
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (psychologist == null) return BadRequest("Psychologist profile not found.");
+
+        var appointment = await context.Appointments
+            .Include(a => a.Patient)
+            .ThenInclude(p => p!.User)
+            .FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+        if (appointment.PsychologistId != psychologist.Id) return Forbid();
+        if (appointment.PatientId == null) return BadRequest("Appointment has no patient linked.");
+
+        var failedAt = dto.ChargeFailedAtUtc ?? DateTime.UtcNow;
+        var nextAttempt = appointment.ChargeRetryAttemptCount < ChargeRetryDelays.Length
+            ? failedAt.Add(ChargeRetryDelays[appointment.ChargeRetryAttemptCount])
+            : null;
+
+        appointment.Status = AppointmentStatus.FinancialPending;
+        appointment.ChargeFailedAtUtc = failedAt;
+        appointment.FinancialRegularizationDeadlineUtc ??= failedAt.Add(FinancialRegularizationWindow);
+        appointment.ChargeRetryAttemptCount += 1;
+        appointment.NextChargeRetryAtUtc = nextAttempt;
+        appointment.LastChargeFailureReason = string.IsNullOrWhiteSpace(dto.FailureReason)
+            ? "charge_failed"
+            : dto.FailureReason.Trim();
+
+        await context.SaveChangesAsync();
+        return Ok(BuildFinancialPendingStatus(appointment));
+    }
+
+    [HttpPost("{id}/payment-method")]
+    [Authorize(Roles = "Patient")]
+    public async Task<ActionResult<FinancialPendingStatusDto>> UpdatePaymentMethod(Guid id, UpdatePaymentMethodDto dto)
+    {
+        var userId = GetUserId();
+        var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (patient == null) return BadRequest("Patient profile not found.");
+
+        var appointment = await context.Appointments
+            .Include(a => a.Patient)
+            .ThenInclude(p => p!.User)
+            .FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+        if (appointment.PatientId != patient.Id) return Forbid();
+
+        if (string.IsNullOrWhiteSpace(dto.MethodReference))
+            return BadRequest("MethodReference is required.");
+
+        appointment.PaymentProvider = string.IsNullOrWhiteSpace(dto.Provider) ? "MercadoPago" : dto.Provider.Trim();
+        appointment.PaymentMethodReference = dto.MethodReference.Trim();
+        appointment.PaymentMethodLastFourDigits = string.IsNullOrWhiteSpace(dto.LastFourDigits)
+            ? null
+            : dto.LastFourDigits.Trim();
+
+        if (appointment.Status == AppointmentStatus.FinancialPending)
+        {
+            appointment.NextChargeRetryAtUtc = DateTime.UtcNow;
+        }
+
+        await context.SaveChangesAsync();
+        return Ok(BuildFinancialPendingStatus(appointment));
+    }
+
+    [HttpGet("{id}/financial-status")]
+    [Authorize]
+    public async Task<ActionResult<FinancialPendingStatusDto>> GetFinancialStatus(Guid id)
+    {
+        var userId = GetUserId();
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+
+        var appointment = await context.Appointments
+            .Include(a => a.Patient)
+            .ThenInclude(p => p!.User)
+            .FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+
+        if (userRole == "Psychologist")
+        {
+            var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (psychologist == null || appointment.PsychologistId != psychologist.Id) return Forbid();
+        }
+        else if (userRole == "Patient")
+        {
+            var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (patient == null || appointment.PatientId != patient.Id) return Forbid();
+        }
+        else
+        {
+            return Forbid();
+        }
+
+        return Ok(BuildFinancialPendingStatus(appointment));
+    }
+
     [HttpDelete("{id}")]
     [Authorize(Roles = "Psychologist")]
     public async Task<IActionResult> DeleteSlot(Guid id)
@@ -583,11 +700,18 @@ public class AppointmentController(
             Start = a.Start,
             End = a.End,
             Status = a.Status,
+            Reason = a.Reason,
+            ChargeFailedAtUtc = a.ChargeFailedAtUtc,
+            FinancialRegularizationDeadlineUtc = a.FinancialRegularizationDeadlineUtc,
+            ChargeRetryAttemptCount = a.ChargeRetryAttemptCount,
+            NextChargeRetryAtUtc = a.NextChargeRetryAtUtc,
+            LastChargeFailureReason = a.LastChargeFailureReason,
+            PaymentProvider = a.PaymentProvider,
+            PaymentMethodLastFourDigits = a.PaymentMethodLastFourDigits
             SessionStatus = a.SessionStatus,
             PaymentStatus = a.PaymentStatus,
             ChargeDecision = a.ChargeDecision,
             DecisionReason = a.DecisionReason,
-            Reason = a.Reason
         };
     }
 
@@ -627,9 +751,54 @@ public class AppointmentController(
 
     private static AppointmentStatus SelectHighestPriorityStatus(IEnumerable<AppointmentStatus> statuses)
     {
+        if (statuses.Contains(AppointmentStatus.FinancialPending)) return AppointmentStatus.FinancialPending;
         if (statuses.Contains(AppointmentStatus.Confirmed)) return AppointmentStatus.Confirmed;
         if (statuses.Contains(AppointmentStatus.Requested)) return AppointmentStatus.Requested;
         return AppointmentStatus.Canceled;
+    }
+
+    private async Task<bool> HasBlockingFinancialPendingAsync(Guid patientId, Guid? ignoreAppointmentId = null)
+    {
+        var now = DateTime.UtcNow;
+
+        return await context.Appointments.AnyAsync(a =>
+            a.PatientId == patientId
+            && a.Status == AppointmentStatus.FinancialPending
+            && (ignoreAppointmentId == null || a.Id != ignoreAppointmentId)
+            && (
+                a.ChargeRetryAttemptCount >= MaxChargeRetryAttempts
+                || (a.FinancialRegularizationDeadlineUtc.HasValue && a.FinancialRegularizationDeadlineUtc.Value < now)
+            ));
+    }
+
+    private static FinancialPendingStatusDto BuildFinancialPendingStatus(Appointment appointment)
+    {
+        var retryLimitReached = appointment.ChargeRetryAttemptCount >= MaxChargeRetryAttempts;
+        var now = DateTime.UtcNow;
+        var deadlineExpired = appointment.FinancialRegularizationDeadlineUtc.HasValue
+            && appointment.FinancialRegularizationDeadlineUtc.Value < now;
+        var blocksNextScheduling = appointment.Status == AppointmentStatus.FinancialPending
+            && (retryLimitReached || deadlineExpired);
+
+        var patientName = appointment.Patient?.User?.Name ?? "Paciente";
+        var notificationMessage =
+            $"{patientName}, houve falha na cobrança da sessão. Atualize o método de pagamento para evitar impacto nos próximos agendamentos.";
+
+        return new FinancialPendingStatusDto
+        {
+            AppointmentId = appointment.Id,
+            ChargeFailedAtUtc = appointment.ChargeFailedAtUtc,
+            FinancialRegularizationDeadlineUtc = appointment.FinancialRegularizationDeadlineUtc,
+            ChargeRetryAttemptCount = appointment.ChargeRetryAttemptCount,
+            NextChargeRetryAtUtc = appointment.NextChargeRetryAtUtc,
+            RetryLimitReached = retryLimitReached,
+            MaxAttempts = MaxChargeRetryAttempts,
+            BlocksNextScheduling = blocksNextScheduling,
+            LastChargeFailureReason = appointment.LastChargeFailureReason,
+            PaymentProvider = appointment.PaymentProvider,
+            PaymentMethodLastFourDigits = appointment.PaymentMethodLastFourDigits,
+            PatientNotificationMessage = notificationMessage
+        };
     }
 
     private static DayOfWeek? ParseWeekday(string input)
