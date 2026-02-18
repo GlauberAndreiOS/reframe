@@ -11,6 +11,10 @@ public class AppointmentDto
     public DateTime Start { get; set; }
     public DateTime End { get; set; }
     public AppointmentStatus Status { get; set; }
+    public SessionStatus SessionStatus { get; set; }
+    public PaymentStatus PaymentStatus { get; set; }
+    public ChargeDecision? ChargeDecision { get; set; }
+    public string? DecisionReason { get; set; }
     public string? Reason { get; set; }
 }
 
@@ -26,6 +30,15 @@ public class BookAppointmentDto
 {
     public Guid SlotId { get; set; }
     public string? Reason { get; set; }
+    public bool AcceptTerms { get; set; }
+}
+
+public class CurrentTermsDto
+{
+    public int Version { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public DateTime EffectiveFrom { get; set; }
+    public bool AlreadyAccepted { get; set; }
 }
 
 public class UpdateAppointmentStatusDto

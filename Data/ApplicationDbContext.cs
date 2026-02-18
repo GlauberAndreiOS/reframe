@@ -16,6 +16,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TherapistPayoutAccount> TherapistPayoutAccounts { get; set; }
     public DbSet<TherapistPayoutPolicy> TherapistPayoutPolicies { get; set; }
     public DbSet<TherapistLedgerTransaction> TherapistLedgerTransactions { get; set; }
+    public DbSet<TherapistTerms> TherapistTerms { get; set; }
+    public DbSet<PatientTermsAcceptance> PatientTermsAcceptances { get; set; }
+    public DbSet<FinancialLedgerEvent> FinancialLedgerEvents { get; set; }
+    public DbSet<FinancialLedgerCurrentBalance> FinancialLedgerCurrentBalances { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -143,5 +147,126 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(t => t.PsychologistId)
             .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<TherapistTerms>()
+            .HasOne(t => t.Therapist)
+            .WithMany()
+            .HasForeignKey(t => t.TherapistId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TherapistTerms>()
+            .HasIndex(t => new { t.TherapistId, t.Version })
+            .IsUnique();
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasOne(a => a.Patient)
+            .WithMany()
+            .HasForeignKey(a => a.PatientId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasOne(a => a.Therapist)
+            .WithMany()
+            .HasForeignKey(a => a.TherapistId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasOne(a => a.Appointment)
+            .WithMany()
+            .HasForeignKey(a => a.AppointmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PatientTermsAcceptance>()
+            .HasIndex(a => new { a.PatientId, a.TherapistId, a.TermsVersion });
+        var financialLedgerBuilder = modelBuilder.Entity<FinancialLedgerEvent>();
+
+        financialLedgerBuilder
+            .ToTable("financial_ledger");
+
+        financialLedgerBuilder
+            .Property(f => f.Id)
+            .HasColumnName("id");
+
+        financialLedgerBuilder
+            .Property(f => f.PatientId)
+            .HasColumnName("patient_id");
+
+        financialLedgerBuilder
+            .Property(f => f.TherapistId)
+            .HasColumnName("therapist_id");
+
+        financialLedgerBuilder
+            .Property(f => f.AppointmentId)
+            .HasColumnName("appointment_id");
+
+        financialLedgerBuilder
+            .Property(f => f.PackageId)
+            .HasColumnName("package_id");
+
+        financialLedgerBuilder
+            .Property(f => f.AmountCents)
+            .HasColumnName("amount_cents");
+
+        financialLedgerBuilder
+            .Property(f => f.Currency)
+            .HasColumnName("currency")
+            .HasMaxLength(3);
+
+        financialLedgerBuilder
+            .Property(f => f.Direction)
+            .HasColumnName("direction")
+            .HasConversion<string>();
+
+        financialLedgerBuilder
+            .Property(f => f.EventType)
+            .HasColumnName("event_type")
+            .HasConversion<string>();
+
+        financialLedgerBuilder
+            .Property(f => f.OccurredAt)
+            .HasColumnName("occurred_at");
+
+        financialLedgerBuilder
+            .Property(f => f.MetadataJson)
+            .HasColumnName("metadata_json")
+            .HasColumnType("jsonb");
+
+        financialLedgerBuilder
+            .Property(f => f.IdempotencyKey)
+            .HasColumnName("idempotency_key")
+            .HasMaxLength(128);
+
+        financialLedgerBuilder
+            .Property(f => f.Source)
+            .HasColumnName("source")
+            .HasConversion<string>();
+
+        financialLedgerBuilder
+            .HasIndex(f => f.IdempotencyKey)
+            .IsUnique();
+
+        financialLedgerBuilder
+            .HasIndex(f => new { f.PatientId, f.TherapistId, f.OccurredAt });
+
+        financialLedgerBuilder
+            .HasOne(f => f.Patient)
+            .WithMany()
+            .HasForeignKey(f => f.PatientId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        financialLedgerBuilder
+            .HasOne(f => f.Therapist)
+            .WithMany()
+            .HasForeignKey(f => f.TherapistId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        financialLedgerBuilder
+            .HasOne(f => f.Appointment)
+            .WithMany()
+            .HasForeignKey(f => f.AppointmentId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<FinancialLedgerCurrentBalance>()
+            .HasNoKey()
+            .ToView("financial_ledger_current_balance");
     }
 }
