@@ -7,6 +7,7 @@ const TAB_SCREEN_NAMES = {
 	QUESTIONNAIRES: 'questionnaires',
 	AGENDA: 'agenda',
 	PROFILE: 'profile',
+	FINANCE: 'finance',
 } as const;
 
 const TAB_SCREENS = [
@@ -24,6 +25,11 @@ const TAB_SCREENS = [
 		name: TAB_SCREEN_NAMES.AGENDA,
 		title: 'Agenda',
 		icon: 'calendar-month',
+	},
+	{
+		name: TAB_SCREEN_NAMES.FINANCE,
+		title: 'Financeiro',
+		icon: 'creditcard.fill',
 	},
 	{
 		name: TAB_SCREEN_NAMES.PROFILE,
