@@ -184,6 +184,9 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
     [HttpGet("{id}")]
     public async Task<ActionResult<QuestionnaireViewDto>> GetQuestionnaire(Guid id)
     {
+        var userId = Guid.Parse(User.FindFirst("UserId")?.Value ?? Guid.Empty.ToString());
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+
         var questionnaire = await context.Questionnaires
             .Include(q => q.TargetPatient)
             .ThenInclude(p => p.User)
@@ -191,6 +194,20 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
 
         if (questionnaire == null) return NotFound();
 
+        if (userRole == "Psychologist")
+        {
+            var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (psychologist == null || questionnaire.PsychologistId != psychologist.Id) return Forbid();
+        }
+        else if (userRole == "Patient")
+        {
+            var patient = await context.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (patient == null || questionnaire.TargetPatientId != patient.Id) return Forbid();
+        }
+        else if (userRole != "Admin")
+        {
+            return Forbid();
+        }
 
         return new QuestionnaireViewDto
         {

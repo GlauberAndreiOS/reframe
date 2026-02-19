@@ -5,7 +5,8 @@ namespace reframe.Models;
 public enum UserType
 {
     Psychologist,
-    Patient
+    Patient,
+    Admin
 }
 
 public class User
@@ -29,6 +30,8 @@ public class User
     public string? ZipCode { get; set; }
     public string? Cpf { get; set; }
     public BiologicalSex? BiologicalSex { get; set; }
+    public bool IsAnonymized { get; set; }
+    public DateTime? DeletedAt { get; set; }
 
     public string? ResetToken { get; set; }
     public DateTime? ResetTokenExpires { get; set; }

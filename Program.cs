@@ -69,7 +69,6 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
 
-
     string tenant;
     string tenantSource;
 
@@ -85,9 +84,7 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
         tenantSource = "Header";
     }
 
-
     var database = TenantWhitelist.GetDatabaseName(tenant);
-
 
     var host = Environment.GetEnvironmentVariable("DBHOST");
     var user = Environment.GetEnvironmentVariable("DBUSER");
@@ -118,6 +115,10 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 #region Services
 
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<ILgpdService, LgpdService>();
+builder.Services.AddScoped<IPaymentGatewayTokenizationService, PaymentGatewayTokenizationService>();
+
 builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 builder.Services.AddScoped<IPayoutFinanceService, PayoutFinanceService>();
 builder.Services.AddScoped<ISessionBillingDecisionService, SessionBillingDecisionService>();
@@ -178,25 +179,14 @@ if (cliCommand is "seed" or "reset-db" or "force-seed")
         logger.LogInformation("Migrations applied successfully.");
 
         logger.LogInformation("--- Seeding database for tenant {Tenant} ---", cliTenant);
-        
-        // If force-seed is used, we might want to bypass the check inside SeedAsync or handle it differently.
-        // For now, let's just call SeedAsync. If you want to force it even if data exists, 
-        // you might need to modify DataSeeder.cs to accept a 'force' parameter.
-        // But based on your request, I'll just call SeedAsync.
-        // Note: DataSeeder currently checks 'if (await context.Users.AnyAsync()) return;'
-        // So 'seed' command will only work if the DB is empty.
-        
+
         if (cliCommand == "force-seed")
         {
-             // To support force-seed without modifying DataSeeder signature too much, 
-             // we rely on the user knowing this might duplicate data if not handled carefully in Seeder.
-             // However, the current Seeder has a check at the beginning.
-             // Let's modify DataSeeder to allow forcing.
-             await DataSeeder.SeedAsync(context, force: true);
+            await DataSeeder.SeedAsync(context, force: true);
         }
         else
         {
-             await DataSeeder.SeedAsync(context);
+            await DataSeeder.SeedAsync(context);
         }
     }
     catch (Exception ex)
@@ -212,6 +202,12 @@ if (cliCommand is "seed" or "reset-db" or "force-seed")
 #region WEB MODE
 
 if (app.Environment.IsDevelopment()) app.MapOpenApi("/openapi/v1.json");
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
@@ -238,7 +234,6 @@ app.UseRouting();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
-
 
 app.UseMiddleware<TenantDatabaseMiddleware>();
 

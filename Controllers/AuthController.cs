@@ -78,6 +78,9 @@ public class AuthController(ApplicationDbContext context, IConfiguration configu
     public async Task<IActionResult> Register(UserDto request)
     {
         if (!IsValidEmail(request.Username)) return BadRequest("Username must be a valid email.");
+        if (request.UserType == UserType.Admin)
+            return BadRequest("Admin users cannot be self-registered.");
+
         if (!IsValidCpf(request.Cpf)) return BadRequest("CPF must contain 11 digits.");
         if (!IsValidZipCode(request.ZipCode)) return BadRequest("ZipCode must contain 8 digits.");
         if (request.UserType == UserType.Psychologist && request.SessionDurationMinutes.HasValue &&

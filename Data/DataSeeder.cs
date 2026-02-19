@@ -56,6 +56,16 @@ public static class DataSeeder
         };
 
 
+        var adminUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Name = "Administrador Reframe",
+            Username = "admin@reframe.com",
+            PasswordHash = passwordHash,
+            UserType = UserType.Admin
+        };
+        context.Users.Add(adminUser);
+
         var psychologists = new List<Psychologist>();
 
         for (var i = 0; i < 5; i++)
