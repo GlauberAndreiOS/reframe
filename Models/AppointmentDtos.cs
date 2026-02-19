@@ -43,6 +43,7 @@ public class BookAppointmentDto
     public string? Reason { get; set; }
     public Guid? TherapyPackageId { get; set; }
     public bool IsExtraSession { get; set; }
+    public bool AcceptTerms { get; set; }
 }
 
 public class PrebookRecurringAppointmentsDto
@@ -62,7 +63,6 @@ public class PrebookRecurringResultDto
 {
     public List<AppointmentDto> ReservedAppointments { get; set; } = new();
     public List<string> SkippedDates { get; set; } = new();
-    public bool AcceptTerms { get; set; }
 }
 
 public class CurrentTermsDto

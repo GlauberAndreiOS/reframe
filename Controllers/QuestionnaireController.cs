@@ -114,7 +114,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
 
                 var questionnaires = await context.Questionnaires
                     .Include(q => q.TargetPatient)
-                    .ThenInclude(p => p.User)
+                    .ThenInclude(p => p!.User)
                     .Where(q => q.PsychologistId == psychologist.Id && q.TargetPatientId == null)
                     .OrderByDescending(q => q.CreatedAt)
                     .ToListAsync();
@@ -189,7 +189,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
 
         var questionnaire = await context.Questionnaires
             .Include(q => q.TargetPatient)
-            .ThenInclude(p => p.User)
+            .ThenInclude(p => p!.User)
             .FirstOrDefaultAsync(q => q.Id == id);
 
         if (questionnaire == null) return NotFound();
@@ -369,7 +369,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
 
         var responses = await context.QuestionnaireResponses
             .Include(r => r.Patient)
-            .ThenInclude(p => p.User)
+            .ThenInclude(p => p!.User)
             .Where(r => r.QuestionnaireId == questionnaireId)
             .OrderByDescending(r => r.SubmittedAt)
             .ToListAsync();
@@ -388,7 +388,7 @@ public class QuestionnaireController(ApplicationDbContext context) : ControllerB
         var response = await context.QuestionnaireResponses
             .Include(r => r.Questionnaire)
             .Include(r => r.Patient)
-            .ThenInclude(p => p.User)
+            .ThenInclude(p => p!.User)
             .FirstOrDefaultAsync(r => r.Id == responseId);
 
         if (response == null) return NotFound();

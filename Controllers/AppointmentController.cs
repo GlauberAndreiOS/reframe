@@ -47,7 +47,7 @@ public class AppointmentController(ApplicationDbContext context, INotificationDi
 
             var appointments = await context.Appointments
                 .Include(a => a.Patient)
-                .ThenInclude(p => p.User)
+                .ThenInclude(p => p!.User)
                 .Where(a => a.PsychologistId == psychologist.Id 
                             && a.Status != AppointmentStatus.Canceled
                             && a.Start >= queryDate 
@@ -108,7 +108,7 @@ public class AppointmentController(ApplicationDbContext context, INotificationDi
                         && (a.Status == AppointmentStatus.Requested
                             || a.Status == AppointmentStatus.Confirmed
                             || a.Status == AppointmentStatus.Canceled
-                            || a.Status == AppointmentStatus.Completed))
+                            || a.Status == AppointmentStatus.Completed
                             || a.Status == AppointmentStatus.FinancialPending))
             .ToListAsync();
 
@@ -236,6 +236,8 @@ public class AppointmentController(ApplicationDbContext context, INotificationDi
             package = await ResolveAndValidatePackage(patient.Id, dto.TherapyPackageId, slot.Start);
             if (package == null)
                 return BadRequest("No valid active package found for this booking.");
+        }
+
         var activeTerms = await context.TherapistTerms
             .Where(t => t.TherapistId == slot.PsychologistId && t.Active && t.EffectiveFrom <= DateTime.UtcNow)
             .OrderByDescending(t => t.Version)
@@ -717,7 +719,7 @@ public class AppointmentController(ApplicationDbContext context, INotificationDi
 
         var failedAt = dto.ChargeFailedAtUtc ?? DateTime.UtcNow;
         var nextAttempt = appointment.ChargeRetryAttemptCount < ChargeRetryDelays.Length
-            ? failedAt.Add(ChargeRetryDelays[appointment.ChargeRetryAttemptCount])
+            ? (DateTime?)failedAt.Add(ChargeRetryDelays[appointment.ChargeRetryAttemptCount])
             : null;
 
         appointment.Status = AppointmentStatus.FinancialPending;
@@ -892,9 +894,8 @@ public class AppointmentController(ApplicationDbContext context, INotificationDi
             TherapyPackageId = appointment.TherapyPackageId,
             ReservedAt = appointment.ReservedAt,
             SessionConsumed = appointment.SessionConsumed,
-            SessionConsumedAt = appointment.SessionConsumedAt
+            SessionConsumedAt = appointment.SessionConsumedAt,
             SessionStatus = SessionStatus.Scheduled,
-            Reason = appointment.Reason
         };
 
         appointment.PatientId = null;
@@ -930,14 +931,14 @@ public class AppointmentController(ApplicationDbContext context, INotificationDi
             Reason = a.Reason,
             TherapyPackageId = a.TherapyPackageId,
             IsExtraSession = a.IsExtraSession,
-            SessionConsumed = a.SessionConsumed
+            SessionConsumed = a.SessionConsumed,
             ChargeFailedAtUtc = a.ChargeFailedAtUtc,
             FinancialRegularizationDeadlineUtc = a.FinancialRegularizationDeadlineUtc,
             ChargeRetryAttemptCount = a.ChargeRetryAttemptCount,
             NextChargeRetryAtUtc = a.NextChargeRetryAtUtc,
             LastChargeFailureReason = a.LastChargeFailureReason,
             PaymentProvider = a.PaymentProvider,
-            PaymentMethodLastFourDigits = a.PaymentMethodLastFourDigits
+            PaymentMethodLastFourDigits = a.PaymentMethodLastFourDigits,
             SessionStatus = a.SessionStatus,
             PaymentStatus = a.PaymentStatus,
             ChargeDecision = a.ChargeDecision,
