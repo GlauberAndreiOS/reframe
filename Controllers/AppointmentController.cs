@@ -12,9 +12,7 @@ namespace reframe.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class AppointmentController(
-    ApplicationDbContext context,
-    ISessionBillingDecisionService billingDecisionService) : ControllerBase
+public class AppointmentController(ApplicationDbContext context, INotificationDispatcher notificationDispatcher, ISessionBillingDecisionService billingDecisionService) : ControllerBase
 {
     private static readonly TimeSpan[] ChargeRetryDelays =
     {
@@ -297,6 +295,7 @@ public class AppointmentController(
         await ApplyBillingDecisionAsync(slot);
 
         await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionCreated, slot.Id);
         return Ok(MapToDto(slot));
     }
 
@@ -501,6 +500,7 @@ public class AppointmentController(
         await ApplyBillingDecisionAsync(targetSlot);
 
         await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionRescheduled, targetSlot.Id);
         return Ok(MapToDto(targetSlot));
     }
 
@@ -594,6 +594,7 @@ public class AppointmentController(
                 appointment.SessionConsumed = false;
                 appointment.SessionConsumedAt = null;
                 appointment.SessionStatus = SessionStatus.CanceledByTherapist;
+                await notificationDispatcher.DispatchAsync(NotificationTemplate.CancellationWindowClosing, appointment.Id);
             }
              else if (dto.NewStart.HasValue && dto.NewEnd.HasValue)
             {
@@ -641,6 +642,25 @@ public class AppointmentController(
         await ApplyBillingDecisionAsync(appointment);
 
         await context.SaveChangesAsync();
+        return Ok(MapToDto(appointment));
+    }
+
+    [HttpPut("{id}/mark-no-show")]
+    [Authorize(Roles = "Psychologist")]
+    public async Task<IActionResult> MarkNoShow(Guid id)
+    {
+        var userId = GetUserId();
+        var psychologist = await context.Psychologists.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (psychologist == null) return BadRequest("Psychologist profile not found.");
+
+        var appointment = await context.Appointments.FirstOrDefaultAsync(a => a.Id == id);
+        if (appointment == null) return NotFound("Appointment not found.");
+        if (appointment.PsychologistId != psychologist.Id) return Forbid();
+
+        appointment.Status = AppointmentStatus.NoShow;
+        await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionNoShow, appointment.Id);
+
         return Ok(MapToDto(appointment));
     }
 
@@ -843,6 +863,7 @@ public class AppointmentController(
             await ApplyBillingDecisionAsync(targetSlot);
 
             await context.SaveChangesAsync();
+            await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionRescheduled, targetSlot.Id);
             return Ok(MapToDto(targetSlot));
         }
 
@@ -891,6 +912,7 @@ public class AppointmentController(
         await ApplyBillingDecisionAsync(newAppointment);
 
         await context.SaveChangesAsync();
+        await notificationDispatcher.DispatchAsync(NotificationTemplate.SessionRescheduled, newAppointment.Id);
         return Ok(MapToDto(newAppointment));
     }
 

@@ -118,6 +118,7 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 #region Services
 
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 builder.Services.AddScoped<IPayoutFinanceService, PayoutFinanceService>();
 builder.Services.AddScoped<ISessionBillingDecisionService, SessionBillingDecisionService>();
 

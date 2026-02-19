@@ -10,6 +10,7 @@ public enum AppointmentStatus
     Requested = 1,
     Confirmed = 2,
     Canceled = 3,
+    NoShow = 4
     Completed = 4
     FinancialPending = 4
 }
